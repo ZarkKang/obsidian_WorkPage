@@ -175,3 +175,148 @@ If your plugin does not need CSS, delete this file.
     width: 16px;
     height: 16px;
 }
+/* ============================================
+   快速添加待办 — 美化样式
+   ============================================ */
+
+.workpage-quick-add {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 24px;
+    padding: 14px 18px;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 12px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.workpage-quick-add:focus-within {
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb, 108, 99, 255), 0.15);
+}
+
+/* 左侧标签区 */
+.quick-add-label-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.quick-add-label-icon {
+    display: flex;
+    align-items: center;
+    color: var(--interactive-accent);
+    opacity: 0.85;
+}
+
+.quick-add-label-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.quick-add-label {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+}
+
+/* 右侧输入区 */
+.quick-add-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+
+.quick-add-input {
+    flex: 1;
+    padding: 7px 12px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    background: var(--background-primary);
+    color: var(--text-normal);
+    font-size: 0.93em;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.quick-add-input:focus {
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb, 108, 99, 255), 0.12);
+}
+
+/* 抖动动画（输入为空时） */
+@keyframes quick-add-shake {
+    0%, 100% { transform: translateX(0); }
+    20%       { transform: translateX(-6px); }
+    40%       { transform: translateX(6px); }
+    60%       { transform: translateX(-4px); }
+    80%       { transform: translateX(4px); }
+}
+
+.quick-add-input--shake {
+    animation: quick-add-shake 0.35s ease;
+    border-color: var(--text-error);
+}
+
+/* 添加按钮 */
+.quick-add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 14px;
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9em;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
+}
+
+.quick-add-btn:hover {
+    background: var(--interactive-accent-hover);
+    transform: translateY(-1px);
+}
+
+.quick-add-btn:active {
+    transform: translateY(0);
+}
+
+.quick-add-btn[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.quick-add-btn-icon {
+    display: flex;
+    align-items: center;
+}
+
+.quick-add-btn-icon svg {
+    width: 15px;
+    height: 15px;
+}
+
+/* loading 状态 */
+@keyframes quick-add-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+.quick-add-btn--loading .quick-add-btn-icon svg {
+    animation: quick-add-spin 0.6s linear infinite;
+}
+
+/* 成功状态（短暂变绿） */
+.quick-add-btn--success {
+    background: var(--color-green, #4caf50) !important;
+}

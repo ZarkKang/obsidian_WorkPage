@@ -1,11 +1,10 @@
 {
-	"id": "sample-plugin",
-	"name": "Sample Plugin",
-	"version": "1.0.0",
-	"minAppVersion": "0.15.0",
-	"description": "Demonstrates some of the capabilities of the Obsidian API.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
-	"isDesktopOnly": false
+  "id": "workpage",
+  "name": "WorkPage",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "一个高度可定制的工作台插件，集中展示待办、最近文件、自定义内容等。",
+  "author": "ZarkKang",
+  "authorUrl": "https://github.com/ZarkKang",
+  "isDesktopOnly": false
 }
