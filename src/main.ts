@@ -1,7 +1,5 @@
 // ============================================================
 // 模块：主插件逻辑 (main.ts)
-// 功能：WorkPage 工作台自定义视图，支持多分区卡片展示、
-//       按钮快捷操作、命令注册、快速添加任务等
 // ============================================================
 
 import {
@@ -16,9 +14,6 @@ import { DEFAULT_SETTINGS, MyPluginSettings, SampleSettingTab, WorkPageButton } 
 
 const VIEW_TYPE_WORKPAGE = "work-page-view";
 
-// ============================================================
-// 自定义视图：WorkPageView
-// ============================================================
 class WorkPageView extends ItemView {
     plugin: MyPlugin;
 
@@ -34,25 +29,20 @@ class WorkPageView extends ItemView {
         await this.render();
     }
 
-    // -----------------------------------------------
-    // 核心渲染
-    // -----------------------------------------------
     async render() {
-        const container = this.containerEl.children[1];
+        const container = this.containerEl.children[1] as HTMLElement;
+        if (!container) return;
         container.empty();
         container.addClass('workpage-container');
 
-        // 页面头部
         const header = container.createDiv({ cls: 'workpage-header' });
         header.createEl('h2', { text: '我的工作台' });
 
-        // 卡片网格
         const grid = container.createDiv({ cls: 'workpage-grid' });
 
         for (const section of this.plugin.settings.sections) {
             const sectionEl = grid.createDiv({ cls: 'workpage-section' });
 
-            // ---------- 标题栏 ----------
             const titleEl = sectionEl.createEl('h3', { cls: 'section-title' });
             const iconMap: Record<string, string> = {
                 'tasks': 'check-circle',
@@ -63,7 +53,6 @@ class WorkPageView extends ItemView {
             const iconSpan = titleEl.createSpan({ cls: 'section-icon' });
             setIcon(iconSpan, iconMap[section.type] || 'layout');
 
-            // 动态标题（任务分区加入日期）
             let displayTitle = section.title;
             if (section.type === 'tasks') {
                 const moment = (window as any).moment;
@@ -72,24 +61,22 @@ class WorkPageView extends ItemView {
             }
             titleEl.createSpan({ text: displayTitle });
 
-            // ---------- 内容容器 ----------
             const content = sectionEl.createDiv({ cls: 'section-content' });
 
-            // ---------- 分区类型分发 ----------
             if (section.type === 'tasks') {
-                // ========== 今日待办（源自日记文件） ==========
                 const loading = content.createEl('p', { text: '加载中...' });
                 this.getTodayTasks().then(tasks => {
                     loading.remove();
                     if (tasks.length === 0) {
-                        const dailyPlugin = this.app.internalPlugins.getEnabledPluginById('daily-notes');
+                        const dailyPlugin = (this.app as any).internalPlugins.getEnabledPluginById('daily-notes');
                         if (!dailyPlugin) {
                             content.createEl('p', { text: '请先启用核心插件“日记”', cls: 'no-data' });
                         } else {
                             content.createEl('p', { text: '今天的日记暂无未完成的任务 ✨', cls: 'no-data' });
                         }
                     } else {
-                        const ul = content.createEl('ul', { style: 'list-style:none; padding:0; margin:0;' });
+                        const ul = content.createEl('ul');
+                        ul.style.cssText = 'list-style:none; padding:0; margin:0;';
                         tasks.forEach(task => {
                             const li = ul.createEl('li', { cls: 'workpage-list-item' });
                             const icon = li.createSpan({ cls: 'item-icon' });
@@ -108,7 +95,6 @@ class WorkPageView extends ItemView {
                 });
 
             } else if (section.type === 'recent_files') {
-                // ========== 最近编辑文件 ==========
                 const maxFiles = section.maxFiles || 10;
                 const sortBy = section.sortBy || 'mtime';
                 const sortOrder = section.sortOrder || 'desc';
@@ -145,7 +131,6 @@ class WorkPageView extends ItemView {
                 }
 
             } else if (section.type === 'custom_text') {
-                // ========== 自定义文本（Markdown） ==========
                 const sourcePath = 'WorkPage/custom-text';
                 await MarkdownRenderer.renderMarkdown(
                     section.content || "在设置中编辑此内容...",
@@ -154,7 +139,6 @@ class WorkPageView extends ItemView {
                     this
                 );
 
-                // 修复内部链接跳转
                 content.querySelectorAll('a.internal-link').forEach(link => {
                     link.addEventListener('click', (event) => {
                         event.preventDefault();
@@ -164,7 +148,6 @@ class WorkPageView extends ItemView {
                 });
 
             } else if (section.type === 'file_list') {
-                // ========== 动态文件列表 ==========
                 const folder = section.folder || '';
                 const nameFilter = section.nameFilter || '';
                 const sortBy = section.sortBy || 'name';
@@ -201,7 +184,6 @@ class WorkPageView extends ItemView {
                 content.createEl('p', { text: '未知分区类型' });
             }
 
-            // ---------- 按钮栏（在卡片底部） ----------
             if (section.buttons && section.buttons.length > 0) {
                 const btnBar = sectionEl.createDiv({ cls: 'workpage-button-bar' });
                 section.buttons.forEach(button => {
@@ -213,13 +195,9 @@ class WorkPageView extends ItemView {
             }
         }
 
-        // 在所有分区之后，添加快速任务输入栏
         this.renderQuickAdd(container);
     }
 
-    // -----------------------------------------------
-    // 按钮动作分发
-    // -----------------------------------------------
     executeButtonAction(button: WorkPageButton) {
         switch (button.action.type) {
             case 'refresh':
@@ -241,23 +219,24 @@ class WorkPageView extends ItemView {
         }
     }
 
-    // 通过 prompt 快速添加任务
     quickAddTask(defaultText = '') {
         const taskText = prompt('输入任务内容', defaultText);
         if (taskText) this.addTaskToToday(taskText);
     }
 
-    // 实际写入今日日记
     async addTaskToToday(taskText: string) {
-        const dailyPlugin = this.app.internalPlugins.getEnabledPluginById('daily-notes');
+        const dailyPlugin = (this.app as any).internalPlugins.getEnabledPluginById('daily-notes');
         if (!dailyPlugin) return;
         const { folder, format } = dailyPlugin.options;
         const moment = (window as any).moment;
         const today = moment().format(format || 'YYYY-MM-DD');
         const filePath = (folder ? `${folder}/` : '') + `${today}.md`;
 
-        let file = this.app.vault.getAbstractFileByPath(filePath);
-        if (!(file instanceof TFile)) {
+        const abstractFile = this.app.vault.getAbstractFileByPath(filePath);
+        let file: TFile;
+        if (abstractFile instanceof TFile) {
+            file = abstractFile;
+        } else {
             file = await this.app.vault.create(filePath, '');
         }
         const currentContent = await this.app.vault.read(file);
@@ -266,9 +245,8 @@ class WorkPageView extends ItemView {
         this.render();
     }
 
-    // 底部快速添加栏
     renderQuickAdd(container: HTMLElement) {
-        const dailyPlugin = this.app.internalPlugins.getEnabledPluginById('daily-notes');
+        const dailyPlugin = (this.app as any).internalPlugins.getEnabledPluginById('daily-notes');
         if (!dailyPlugin) return;
         const quickDiv = container.createDiv({ cls: 'workpage-quick-add' });
         quickDiv.createEl('span', { text: '快速添加待办：', cls: 'quick-add-label' });
@@ -286,12 +264,9 @@ class WorkPageView extends ItemView {
         input.addEventListener('keypress', (e) => { if (e.key === 'Enter') add(); });
     }
 
-    // -----------------------------------------------
-    // 数据获取
-    // -----------------------------------------------
     async getTodayTasks(): Promise<{ file: TFile; line: number; text: string }[]> {
         const tasks: { file: TFile; line: number; text: string }[] = [];
-        const dailyPlugin = this.app.internalPlugins.getEnabledPluginById('daily-notes');
+        const dailyPlugin = (this.app as any).internalPlugins.getEnabledPluginById('daily-notes');
         if (!dailyPlugin) return tasks;
 
         const { folder, format } = dailyPlugin.options;
@@ -305,8 +280,9 @@ class WorkPageView extends ItemView {
         const content = await this.app.vault.read(file);
         const lines = content.split('\n');
         for (let i = 0; i < lines.length; i++) {
-            if (/^\s*-\s*\[ \]/.test(lines[i])) {
-                tasks.push({ file, line: i, text: lines[i].trim() });
+            const line = lines[i];
+            if (line && /^\s*-\s*\[ \]/.test(line)) {
+                tasks.push({ file, line: i, text: line.trim() });
             }
         }
         return tasks;
@@ -319,8 +295,9 @@ class WorkPageView extends ItemView {
             const content = await this.app.vault.read(file);
             const lines = content.split('\n');
             for (let i = 0; i < lines.length; i++) {
-                if (/^\s*-\s*\[ \]/.test(lines[i])) {
-                    tasks.push({ file, line: i, text: lines[i].trim() });
+                const line = lines[i];
+                if (line && /^\s*-\s*\[ \]/.test(line)) {
+                    tasks.push({ file, line: i, text: line.trim() });
                 }
             }
         }
@@ -329,9 +306,6 @@ class WorkPageView extends ItemView {
     }
 }
 
-// ============================================================
-// 插件主类
-// ============================================================
 export default class MyPlugin extends Plugin {
     settings: MyPluginSettings;
 
@@ -344,7 +318,6 @@ export default class MyPlugin extends Plugin {
 
         this.addSettingTab(new SampleSettingTab(this.app, this));
 
-        // 监听 vault 修改 → 刷新
         this.registerEvent(
             this.app.vault.on('modify', () => {
                 this.app.workspace.getLeavesOfType(VIEW_TYPE_WORKPAGE).forEach(leaf => {
@@ -353,18 +326,15 @@ export default class MyPlugin extends Plugin {
             })
         );
 
-        // 启动时自动打开
         if (this.settings.openOnStartup) {
             this.app.workspace.onLayoutReady(() => this.activateView());
         }
 
-        // 无标签页时自动打开
         if (this.settings.openWhenEmpty) {
             this.registerEvent(this.app.workspace.on('active-leaf-change', () => setTimeout(() => this.checkAndShowWorkPage(), 100)));
             this.registerEvent(this.app.workspace.on('layout-change', () => setTimeout(() => this.checkAndShowWorkPage(), 100)));
         }
 
-        // 注册按钮命令（支持快捷键）
         this.settings.sections.forEach(section => {
             section.buttons?.forEach(button => {
                 const commandId = `workpage:${section.id}-${button.id}`;
@@ -374,12 +344,12 @@ export default class MyPlugin extends Plugin {
                     callback: () => {
                         const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_WORKPAGE);
                         if (leaves.length > 0) {
-                            (leaves[0].view as WorkPageView).executeButtonAction(button);
+                            (leaves[0]!.view as WorkPageView).executeButtonAction(button);
                         } else {
                             this.activateView().then(() => {
                                 setTimeout(() => {
                                     const newLeaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_WORKPAGE);
-                                    if (newLeaves.length > 0) (newLeaves[0].view as WorkPageView).executeButtonAction(button);
+                                    if (newLeaves.length > 0) (newLeaves[0]!.view as WorkPageView).executeButtonAction(button);
                                 }, 200);
                             });
                         }
@@ -389,7 +359,6 @@ export default class MyPlugin extends Plugin {
         });
     }
 
-    // 激活视图
     async activateView() {
         const { workspace } = this.app;
         let leaf = workspace.getLeavesOfType(VIEW_TYPE_WORKPAGE)[0];
@@ -400,7 +369,6 @@ export default class MyPlugin extends Plugin {
         workspace.revealLeaf(leaf);
     }
 
-    // 检查并显示工作台（当所有标签页关闭时）
     checkAndShowWorkPage() {
         const markdownLeaves = this.app.workspace.getLeavesOfType('markdown');
         const hasAnyFileOpen = markdownLeaves.some(leaf => {

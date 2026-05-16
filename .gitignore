@@ -4,9 +4,7 @@ npm-debug.log*
 yarn-error.log
 
 # Build
-main.js
 main.js.map
-styles.css
 styles.css.map
 
 # Obsidian

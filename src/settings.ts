@@ -15,14 +15,14 @@ export interface WorkPageSection {
     id: string;
     title: string;
     type: 'tasks' | 'recent_files' | 'custom_text' | 'file_list';
-    content: string; // 用于 custom_text
-    buttons?: WorkPageButton[];
+    content: string;
 
-    // 以下属性用于 type === 'file_list'
-    folder?: string;           // 目标文件夹，留空表示全库
-    nameFilter?: string;       // 文件名需包含的文本
-    sortBy?: 'name' | 'mtime'; // 排序依据
-    sortOrder?: 'asc' | 'desc'; // 排序方向
+    sortBy?: 'mtime' | 'name';
+    sortOrder?: 'desc' | 'asc';
+    excludeFolders?: string;   // 用于 recent_files
+    folder?: string;           // 用于 file_list
+    nameFilter?: string;       // 用于 file_list
+    buttons?: WorkPageButton[];
 }
 
 export interface MyPluginSettings {
@@ -360,7 +360,7 @@ export class SampleSettingTab extends PluginSettingTab {
                 await this.plugin.saveSettings();
                 this.display(); // 刷新界面
                 new Notice('模板导入成功');
-            } catch (e) {
+            } catch (e: any) {
                 new Notice('导入失败：' + e.message);
             }
         };
@@ -390,15 +390,14 @@ export interface WorkPageSection {
     content: string;
 
     // ---- 以下用于 recent_files 分区 ----
-    maxFiles?: number;          // 最大显示数量，默认 10
-    sortBy?: 'mtime' | 'name'; // 排序字段，默认 mtime
-    sortOrder?: 'desc' | 'asc'; // 排序方向，默认 desc
-    excludeFolders?: string;   // 排除的文件夹
 
-    // ---- 以下用于 file_list 分区 ----
-    maxFiles?: number; // 动态文件列表的最大显示条数，默认 20
+    maxFiles?: number;          // 最大显示数量
+    sortBy?: 'mtime' | 'name';
+    sortOrder?: 'desc' | 'asc';
+    excludeFolders?: string;
     folder?: string;
     nameFilter?: string;
+    buttons?: WorkPageButton[];
     
     // ---- 其他类型专属属性（如 file_list 已有）保持不动 ----
     
