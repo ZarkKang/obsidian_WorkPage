@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
+import { App, PluginSettingTab, Setting, Notice, Platform } from 'obsidian';
 import MyPlugin from './main';
 
 export interface WorkPageButton {
@@ -11,24 +11,15 @@ export interface WorkPageButton {
     };
 }
 
-export interface WorkPageSection {
-    id: string;
-    title: string;
-    type: 'tasks' | 'recent_files' | 'custom_text' | 'file_list'
-        | 'dashboard' | 'calendar' | 'scratchpad' | 'tag_cloud';
-    content: string;
-    maxFiles?: number;
-    sortBy?: 'mtime' | 'name';
-    sortOrder?: 'desc' | 'asc';
-    excludeFolders?: string;
-    folder?: string;
-    nameFilter?: string;
-    buttons?: WorkPageButton[];
-    // scratchpad 专属
-    scratchpadTarget?: 'daily' | 'new' | 'append';
-    scratchpadFile?: string;
-    // tag_cloud 专属
-    tagMaxCount?: number;
+export interface CalendarConfig {
+    compactMode?: boolean;
+    mondayFirst?: boolean;
+    showWeekNumbers?: boolean;
+    showYearMonthSelect?: boolean;
+    highlightToday?: boolean;
+    showTaskCount?: boolean;
+    dateFormat?: string;
+    folderPath?: string;
 }
 
 export interface QuickAddSettings {
@@ -40,8 +31,31 @@ export interface QuickAddSettings {
     showSuccessNotice: boolean;
 }
 
+export interface WorkPageSection {
+    id: string;
+    title: string;
+    type: 'tasks' | 'recent_files' | 'custom_text' | 'file_list'
+        | 'dashboard' | 'calendar' | 'scratchpad' | 'tag_cloud';
+    content: string;
+    gridSpan?: number;          // 分区跨度列数 (1~3)
+    maxFiles?: number;          // 最大显示数量
+    sortBy?: 'mtime' | 'name'; // 排序字段
+    sortOrder?: 'desc' | 'asc'; // 排序方向
+    excludeFolders?: string;    // 排除的文件夹
+    folder?: string;            // 目标文件夹路径
+    nameFilter?: string;        // 过滤关键字
+    buttons?: WorkPageButton[];
+    scratchpadTarget?: 'daily' | 'new' | 'append'; // 草稿保存目标
+    scratchpadFile?: string;     // 草稿目标文件
+    tagMaxCount?: number;       // 最大标签数
+    calendarConfig?: CalendarConfig; // 日历专属配置
+}
+
 export interface MyPluginSettings {
-    sections: WorkPageSection[];
+    sections: WorkPageSection[];        // 单一布局数据（向下兼容）
+    desktopSections: WorkPageSection[]; // 电脑端专用独立布局数据
+    mobileSections: WorkPageSection[];  // 手机端专用独立布局数据
+    useSeparateLayouts: boolean;        // 是否分端管理布局
     openOnStartup: boolean;
     openWhenEmpty: boolean;
     quickAdd: QuickAddSettings;
@@ -58,16 +72,42 @@ export const DEFAULT_QUICK_ADD: QuickAddSettings = {
 
 export const DEFAULT_SETTINGS: MyPluginSettings = {
     sections: [
-        { id: '1', title: '今日待办', type: 'tasks', content: '' },
-        { id: '2', title: '最近编辑', type: 'recent_files', content: '' },
+        { id: '1', title: '今日待办', type: 'tasks', content: '', gridSpan: 1 },
+        { id: '2', title: '最近编辑', type: 'recent_files', content: '', gridSpan: 1 },
     ],
+    // 电脑端精美多列默认界面
+    desktopSections: [
+        { id: 'd1', title: '今日统计看板', type: 'dashboard', content: '', gridSpan: 3 },
+        { id: 'd2', title: '今日待办任务', type: 'tasks', content: '', gridSpan: 1 },
+        { id: 'd3', title: '日历跳转器', type: 'calendar', content: '', gridSpan: 1 },
+        { id: 'd4', title: '随手草稿纸', type: 'scratchpad', content: '', gridSpan: 1 },
+        { id: 'd5', title: '最近编辑笔记', type: 'recent_files', content: '', gridSpan: 2 },
+        { id: 'd6', title: '常用标签云', type: 'tag_cloud', content: '', gridSpan: 1 },
+    ],
+    // 手机端紧凑单列默认界面
+    mobileSections: [
+        { id: 'm1', title: '今日看板', type: 'dashboard', content: '', gridSpan: 1 },
+        { id: 'm2', title: '今日待办', type: 'tasks', content: '', gridSpan: 1 },
+        { id: 'm3', title: '随手草稿', type: 'scratchpad', content: '', gridSpan: 1 },
+        { id: 'm4', title: '最近编辑', type: 'recent_files', content: '', gridSpan: 1 },
+    ],
+    useSeparateLayouts: true, // 默认启用双端界面分离
     openOnStartup: false,
     openWhenEmpty: false,
     quickAdd: { ...DEFAULT_QUICK_ADD },
 };
 
+// 策略导出助手：获取或判定当前终端应渲染的分区
+export function getCurrentSections(settings: MyPluginSettings): WorkPageSection[] {
+    if (!settings.useSeparateLayouts) {
+        return settings.sections || [];
+    }
+    return Platform.isMobile ? (settings.mobileSections || []) : (settings.desktopSections || []);
+}
+
 export class WorkPageSettingTab extends PluginSettingTab {
     plugin: MyPlugin;
+    private currentEditMode: 'desktop' | 'mobile' = Platform.isMobile ? 'mobile' : 'desktop';
 
     constructor(app: App, plugin: MyPlugin) {
         super(app, plugin);
@@ -78,13 +118,50 @@ export class WorkPageSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
-        new Setting(containerEl).setName('WorkPage 布局设置').setHeading();
+        new Setting(containerEl).setName('WorkPage 核心行为设置').setHeading();
 
-        this.plugin.settings.sections.forEach((section, index) => {
+        new Setting(containerEl)
+            .setName('分立电脑/手机布局')
+            .setDesc('开启后，桌面电脑与移动手机将分别展现完全不同的工作台布局与默认组件。')
+            .addToggle((toggle) =>
+                toggle
+                    .setValue(this.plugin.settings.useSeparateLayouts ?? true)
+                    .onChange(async (value) => {
+                        this.plugin.settings.useSeparateLayouts = value;
+                        await this.plugin.saveSettings();
+                        this.display();
+                    })
+            );
+
+        // 如果开启双端分立，允许在设置界面内手动切换配置的目标端
+        let activeSections = this.plugin.settings.sections;
+        if (this.plugin.settings.useSeparateLayouts) {
+            new Setting(containerEl)
+                .setName('当前正在配置的界面')
+                .setDesc('选择你打算自定义哪个终端的工作台布局')
+                .addDropdown((drop) =>
+                    drop
+                        .addOption('desktop', '🖥️ 电脑端布局配置')
+                        .addOption('mobile', '📱 手机端布局配置')
+                        .setValue(this.currentEditMode)
+                        .onChange((value: 'desktop' | 'mobile') => {
+                            this.currentEditMode = value;
+                            this.display();
+                        })
+                );
+            activeSections = this.currentEditMode === 'mobile' ? this.plugin.settings.mobileSections : this.plugin.settings.desktopSections;
+        }
+
+        containerEl.createEl('h3', { text: `当前布局分区管理 (${this.plugin.settings.useSeparateLayouts ? (this.currentEditMode === 'mobile' ? '手机端' : '电脑端') : '通用全局'})` });
+
+        activeSections.forEach((section, index) => {
+            const secHeader = containerEl.createEl('h4', { text: `分区 ${index + 1}: ${section.title || '未命名'}` });
+            secHeader.style.marginTop = '20px';
+
             // ── 分区基础设置 ──
             new Setting(containerEl)
-                .setName(`分区 ${index + 1}`)
-                .setDesc(`设置 ${section.title} 的显示内容`)
+                .setName('名称与组件类型')
+                .setDesc('修改分区标题及展示的组件')
                 .addText((text) =>
                     text
                         .setPlaceholder('分区名称')
@@ -107,18 +184,40 @@ export class WorkPageSettingTab extends PluginSettingTab {
                         .setValue(section.type)
                         .onChange(async (value: WorkPageSection['type']) => {
                             section.type = value;
+                            // 重置对应专属属性的初值
+                            if (value === 'calendar' && !section.calendarConfig) section.calendarConfig = {};
                             await this.plugin.saveSettings();
                             this.display();
                         })
                 )
                 .addButton((btn) =>
                     btn
-                        .setButtonText('删除')
+                        .setButtonText('删除分区')
                         .setWarning()
                         .onClick(async () => {
-                            this.plugin.settings.sections.splice(index, 1);
+                            if (this.plugin.settings.useSeparateLayouts) {
+                                if (this.currentEditMode === 'mobile') this.plugin.settings.mobileSections.splice(index, 1);
+                                else this.plugin.settings.desktopSections.splice(index, 1);
+                            } else {
+                                this.plugin.settings.sections.splice(index, 1);
+                            }
                             await this.plugin.saveSettings();
                             this.display();
+                        })
+                );
+
+            // ── 分区尺寸/跨度设置（大小配置） ──
+            new Setting(containerEl)
+                .setName('组件跨列大小 (Grid Span)')
+                .setDesc('在电脑端网格系统内占用的列宽（1~3列。注：手机端始终会自动紧凑平铺为1列）')
+                .addSlider((slider) =>
+                    slider
+                        .setLimits(1, 3, 1)
+                        .setValue(section.gridSpan || 1)
+                        .setDynamicTooltip()
+                        .onChange(async (value) => {
+                            section.gridSpan = value;
+                            await this.plugin.saveSettings();
                         })
                 );
 
@@ -126,7 +225,6 @@ export class WorkPageSettingTab extends PluginSettingTab {
             if (section.type === 'recent_files') {
                 new Setting(containerEl)
                     .setName('最大显示数量')
-                    .setDesc('最近文件列表最多展示几个文件（1~50）')
                     .addSlider((slider) =>
                         slider
                             .setLimits(1, 50, 1)
@@ -155,8 +253,8 @@ export class WorkPageSettingTab extends PluginSettingTab {
                     .setName('排序方向')
                     .addDropdown((dropdown) =>
                         dropdown
-                            .addOption('desc', '降序（最新在前）')
-                            .addOption('asc', '升序（最旧在前）')
+                            .addOption('desc', '降序')
+                            .addOption('asc', '升序')
                             .setValue(section.sortOrder || 'desc')
                             .onChange(async (value: 'desc' | 'asc') => {
                                 section.sortOrder = value;
@@ -166,7 +264,6 @@ export class WorkPageSettingTab extends PluginSettingTab {
 
                 new Setting(containerEl)
                     .setName('排除文件夹')
-                    .setDesc('多个文件夹用英文逗号分隔，例如：Archive,Templates')
                     .addText((text) =>
                         text
                             .setPlaceholder('Archive,Templates')
@@ -182,7 +279,6 @@ export class WorkPageSettingTab extends PluginSettingTab {
             if (section.type === 'file_list') {
                 new Setting(containerEl)
                     .setName('目标文件夹')
-                    .setDesc('留空表示搜索整个仓库')
                     .addText((text) =>
                         text
                             .setValue(section.folder || '')
@@ -194,7 +290,6 @@ export class WorkPageSettingTab extends PluginSettingTab {
 
                 new Setting(containerEl)
                     .setName('文件名过滤')
-                    .setDesc('只显示文件名包含该文本的笔记')
                     .addText((text) =>
                         text
                             .setValue(section.nameFilter || '')
@@ -205,34 +300,7 @@ export class WorkPageSettingTab extends PluginSettingTab {
                     );
 
                 new Setting(containerEl)
-                    .setName('排序依据')
-                    .addDropdown((dropdown) =>
-                        dropdown
-                            .addOption('name', '文件名')
-                            .addOption('mtime', '修改时间')
-                            .setValue(section.sortBy || 'name')
-                            .onChange(async (value: 'name' | 'mtime') => {
-                                section.sortBy = value;
-                                await this.plugin.saveSettings();
-                            })
-                    );
-
-                new Setting(containerEl)
-                    .setName('排序方向')
-                    .addDropdown((dropdown) =>
-                        dropdown
-                            .addOption('asc', '升序')
-                            .addOption('desc', '降序')
-                            .setValue(section.sortOrder || 'asc')
-                            .onChange(async (value: 'asc' | 'desc') => {
-                                section.sortOrder = value;
-                                await this.plugin.saveSettings();
-                            })
-                    );
-
-                new Setting(containerEl)
                     .setName('最大显示数量')
-                    .setDesc('列表最多展示多少个文件（1~50）')
                     .addSlider((slider) =>
                         slider
                             .setLimits(1, 50, 1)
@@ -248,7 +316,7 @@ export class WorkPageSettingTab extends PluginSettingTab {
             // ── custom_text 专属 ──
             if (section.type === 'custom_text') {
                 new Setting(containerEl)
-                    .setName('自定义内容')
+                    .setName('自定义 Markdown 内容')
                     .addTextArea((text) =>
                         text
                             .setValue(section.content)
@@ -263,7 +331,6 @@ export class WorkPageSettingTab extends PluginSettingTab {
             if (section.type === 'scratchpad') {
                 new Setting(containerEl)
                     .setName('保存目标')
-                    .setDesc('内容保存到哪里')
                     .addDropdown((drop) =>
                         drop
                             .addOption('daily', '追加到今日日记')
@@ -280,7 +347,6 @@ export class WorkPageSettingTab extends PluginSettingTab {
                 if (section.scratchpadTarget === 'append') {
                     new Setting(containerEl)
                         .setName('目标文件路径')
-                        .setDesc('例如：Notes/草稿.md')
                         .addText((text) =>
                             text
                                 .setPlaceholder('Notes/草稿.md')
@@ -297,7 +363,6 @@ export class WorkPageSettingTab extends PluginSettingTab {
             if (section.type === 'tag_cloud') {
                 new Setting(containerEl)
                     .setName('最多显示标签数')
-                    .setDesc('按使用频率排序，显示前 N 个标签（5~100）')
                     .addSlider((slider) =>
                         slider
                             .setLimits(5, 100, 5)
@@ -310,86 +375,125 @@ export class WorkPageSettingTab extends PluginSettingTab {
                     );
             }
 
-            // ── 按钮设置（所有类型均可添加） ──
-            containerEl.createEl('h4', { text: '快捷按钮' });
-            const buttonsContainer = containerEl.createDiv({ cls: 'workpage-buttons-config' });
+            // ── calendar 专属（已正确修复挪回此处展示视图控件） ──
+            if (section.type === 'calendar') {
+                if (!section.calendarConfig) section.calendarConfig = {};
 
+                new Setting(containerEl)
+                    .setName('日历显示密度')
+                    .addDropdown((drop) =>
+                        drop
+                            .addOption('normal', '标准模式')
+                            .addOption('compact', '紧凑模式')
+                            .setValue(section.calendarConfig.compactMode ? 'compact' : 'normal')
+                            .onChange(async (value) => {
+                                section.calendarConfig!.compactMode = value === 'compact';
+                                await this.plugin.saveSettings();
+                            })
+                    );
+
+                new Setting(containerEl)
+                    .setName('周一作为第一天')
+                    .addToggle((toggle) =>
+                        toggle
+                            .setValue(section.calendarConfig?.mondayFirst ?? false)
+                            .onChange(async (value) => {
+                                section.calendarConfig!.mondayFirst = value;
+                                await this.plugin.saveSettings();
+                            })
+                    );
+
+                new Setting(containerEl)
+                    .setName('显示周数')
+                    .addToggle((toggle) =>
+                        toggle
+                            .setValue(section.calendarConfig?.showWeekNumbers ?? false)
+                            .onChange(async (value) => {
+                                section.calendarConfig!.showWeekNumbers = value;
+                                await this.plugin.saveSettings();
+                            })
+                    );
+
+                new Setting(containerEl)
+                    .setName('显示任务统计进度')
+                    .addToggle((toggle) =>
+                        toggle
+                            .setValue(section.calendarConfig?.showTaskCount ?? true)
+                            .onChange(async (value) => {
+                                section.calendarConfig!.showTaskCount = value;
+                                await this.plugin.saveSettings();
+                            })
+                    );
+
+                new Setting(containerEl)
+                    .setName('自定义日记文件夹路径')
+                    .setDesc('留空则直接读取日记基础核心设置路径')
+                    .addText((text) =>
+                        text
+                            .setPlaceholder('日记/每日')
+                            .setValue(section.calendarConfig?.folderPath || '')
+                            .onChange(async (value) => {
+                                section.calendarConfig!.folderPath = value;
+                                await this.plugin.saveSettings();
+                            })
+                    );
+            }
+
+            // ── 快捷按钮配置 ──
+            const btnWrap = containerEl.createDiv();
+            btnWrap.createEl('h5', { text: '⚙️ 区域快捷按钮配置' });
             if (!section.buttons) section.buttons = [];
 
             section.buttons.forEach((button, btnIndex) => {
-                new Setting(buttonsContainer)
-                    .setName(button.label)
-                    .setDesc(`动作: ${button.action.type}`)
-                    .addText((text) =>
-                        text
-                            .setValue(button.label)
-                            .onChange(async (value) => {
-                                button.label = value;
-                                await this.plugin.saveSettings();
-                            })
+                new Setting(btnWrap)
+                    .setName(`动作按钮: ${button.label || '未命名'}`)
+                    .addText((t) => t.setValue(button.label).setPlaceholder('按钮标签名称').onChange(async (v) => { button.label = v; await this.plugin.saveSettings(); }))
+                    .addDropdown((d) => d
+                        .addOption('refresh', '刷新')
+                        .addOption('open-file', '打开文件')
+                        .addOption('command', '运行命令')
+                        .addOption('add-task', '添加待办任务')
+                        .setValue(button.action.type)
+                        .onChange(async (v: any) => { button.action.type = v; await this.plugin.saveSettings(); this.display(); })
                     )
-                    .addDropdown((drop) =>
-                        drop
-                            .addOption('refresh', '刷新')
-                            .addOption('open-file', '打开文件')
-                            .addOption('command', '命令')
-                            .addOption('add-task', '添加任务')
-                            .setValue(button.action.type)
-                            .onChange(async (value: 'refresh' | 'open-file' | 'command' | 'add-task') => {
-                                button.action.type = value;
-                                await this.plugin.saveSettings();
-                                this.display();
-                            })
-                    )
-                    .addText((text) => {
-                        if (button.action.type === 'open-file' || button.action.type === 'command') {
-                            text.setValue(button.action.payload || '')
-                                .setPlaceholder('路径或命令ID')
-                                .onChange(async (value) => {
-                                    button.action.payload = value;
-                                    await this.plugin.saveSettings();
-                                });
-                        } else {
-                            text.setDisabled(true);
-                        }
+                    .addText((t) => {
+                        t.setValue(button.action.payload || '').setPlaceholder('动作参数(路径/命令ID)').onChange(async (v) => { button.action.payload = v; await this.plugin.saveSettings(); });
+                        if (button.action.type !== 'open-file' && button.action.type !== 'command') t.setDisabled(true);
                     })
-                    .addButton((btn) =>
-                        btn
-                            .setButtonText('删除')
-                            .setWarning()
-                            .onClick(async () => {
-                                section.buttons?.splice(btnIndex, 1);
-                                await this.plugin.saveSettings();
-                                this.display();
-                            })
-                    );
+                    .addButton((b) => b.setButtonText('删除按钮').setWarning().onClick(async () => { section.buttons?.splice(btnIndex, 1); await this.plugin.saveSettings(); this.display(); }));
             });
 
-            new Setting(buttonsContainer).addButton((btn) =>
-                btn
-                    .setButtonText('添加按钮')
-                    .setCta()
-                    .onClick(async () => {
-                        section.buttons?.push({
-                            id: Date.now().toString(),
-                            label: '新按钮',
-                            icon: 'play',
-                            action: { type: 'refresh' },
-                        });
-                        await this.plugin.saveSettings();
-                        this.display();
-                    })
-            );
+            new Setting(btnWrap).addButton((b) => b.setButtonText('+ 新增关联动作按钮').setCta().onClick(async () => {
+                section.buttons!.push({ id: Date.now().toString(), label: '新行动', icon: 'play', action: { type: 'refresh' } });
+                await this.plugin.saveSettings();
+                this.display();
+            }));
 
             containerEl.createEl('hr');
         });
 
-        // ── 快速添加待办设置 ──
-        new Setting(containerEl).setName('快速添加待办').setHeading();
+        // ── 添加新分区 ──
+        new Setting(containerEl).addButton((btn) =>
+            btn
+                .setButtonText('+ 创建新页面分区')
+                .setCta()
+                .onClick(async () => {
+                    const newSec: WorkPageSection = { id: Date.now().toString(), title: '未命名分区', type: 'custom_text', content: '', gridSpan: 1 };
+                    if (this.plugin.settings.useSeparateLayouts) {
+                        if (this.currentEditMode === 'mobile') this.plugin.settings.mobileSections.push(newSec);
+                        else this.plugin.settings.desktopSections.push(newSec);
+                    } else {
+                        this.plugin.settings.sections.push(newSec);
+                    }
+                    await this.plugin.saveSettings();
+                    this.display();
+                })
+        );
 
+        // ── 快速添加待办设置 ──
+        new Setting(containerEl).setName('工作台快速添加栏配置').setHeading();
         new Setting(containerEl)
-            .setName('启用快速添加栏')
-            .setDesc('在工作台显示快速添加待办输入框')
+            .setName('启用顶部/底部快速添加输入框')
             .addToggle((toggle) =>
                 toggle
                     .setValue(this.plugin.settings.quickAdd?.enabled ?? true)
@@ -400,141 +504,33 @@ export class WorkPageSettingTab extends PluginSettingTab {
                     })
             );
 
-        if (this.plugin.settings.quickAdd?.enabled !== false) {
+        if (this.plugin.settings.quickAdd?.enabled) {
             new Setting(containerEl)
-                .setName('显示位置')
-                .setDesc('快速添加栏出现在工作台的位置')
-                .addDropdown((drop) =>
-                    drop
-                        .addOption('bottom', '底部（默认）')
-                        .addOption('top', '顶部')
-                        .setValue(this.plugin.settings.quickAdd?.position ?? 'bottom')
-                        .onChange(async (value: 'top' | 'bottom') => {
-                            this.plugin.settings.quickAdd.position = value;
-                            await this.plugin.saveSettings();
-                        })
-                );
-
-            new Setting(containerEl)
-                .setName('标签文字')
-                .setDesc('输入框左侧显示的提示文字')
-                .addText((text) =>
-                    text
-                        .setPlaceholder('快速添加待办')
-                        .setValue(this.plugin.settings.quickAdd?.label ?? '快速添加待办')
-                        .onChange(async (value) => {
-                            this.plugin.settings.quickAdd.label = value;
-                            await this.plugin.saveSettings();
-                        })
-                );
-
-            new Setting(containerEl)
-                .setName('输入框占位符')
-                .setDesc('输入框为空时显示的提示文字')
-                .addText((text) =>
-                    text
-                        .setPlaceholder('输入新任务，回车添加...')
-                        .setValue(this.plugin.settings.quickAdd?.placeholder ?? '输入新任务，回车添加...')
-                        .onChange(async (value) => {
-                            this.plugin.settings.quickAdd.placeholder = value;
-                            await this.plugin.saveSettings();
-                        })
-                );
-
-            new Setting(containerEl)
-                .setName('按钮文字')
-                .setDesc('添加按钮上显示的文字')
-                .addText((text) =>
-                    text
-                        .setPlaceholder('添加')
-                        .setValue(this.plugin.settings.quickAdd?.buttonText ?? '添加')
-                        .onChange(async (value) => {
-                            this.plugin.settings.quickAdd.buttonText = value;
-                            await this.plugin.saveSettings();
-                        })
-                );
-
-            new Setting(containerEl)
-                .setName('添加成功通知')
-                .setDesc('任务添加成功后是否弹出通知')
-                .addToggle((toggle) =>
-                    toggle
-                        .setValue(this.plugin.settings.quickAdd?.showSuccessNotice ?? true)
-                        .onChange(async (value) => {
-                            this.plugin.settings.quickAdd.showSuccessNotice = value;
-                            await this.plugin.saveSettings();
-                        })
-                );
+                .setName('显示摆放位置')
+                .addDropdown((drop) => drop.addOption('bottom', '容器底部').addOption('top', '容器顶部').setValue(this.plugin.settings.quickAdd.position).onChange(async (v: any) => { this.plugin.settings.quickAdd.position = v; await this.plugin.saveSettings(); }));
         }
 
-        // ── 启动行为 ──
-        new Setting(containerEl).setName('启动行为').setHeading();
+        // ── 启动行为与模板 ──
+        new Setting(containerEl).setName('全局环境与模板行为').setHeading();
+        new Setting(containerEl).setName('软件启动时默认打开 WorkPage').addToggle((t) => t.setValue(this.plugin.settings.openOnStartup).onChange(async (v) => { this.plugin.settings.openOnStartup = v; await this.plugin.saveSettings(); }));
+        new Setting(containerEl).setName('没有活跃标签页时强制回归 WorkPage').addToggle((t) => t.setValue(this.plugin.settings.openWhenEmpty).onChange(async (v) => { this.plugin.settings.openWhenEmpty = v; await this.plugin.saveSettings(); }));
 
         new Setting(containerEl)
-            .setName('启动时自动打开 WorkPage')
-            .setDesc('Obsidian 启动后自动在工作区打开 WorkPage')
-            .addToggle((toggle) =>
-                toggle.setValue(this.plugin.settings.openOnStartup).onChange(async (value) => {
-                    this.plugin.settings.openOnStartup = value;
-                    await this.plugin.saveSettings();
-                })
-            );
-
-        new Setting(containerEl)
-            .setName('无标签页时显示 WorkPage')
-            .setDesc('关闭所有笔记后自动切换至 WorkPage')
-            .addToggle((toggle) =>
-                toggle.setValue(this.plugin.settings.openWhenEmpty).onChange(async (value) => {
-                    this.plugin.settings.openWhenEmpty = value;
-                    await this.plugin.saveSettings();
-                })
-            );
-
-        // ── 模板导入/导出 ──
-        new Setting(containerEl).setName('导入/导出模板').setHeading();
-
-        new Setting(containerEl)
-            .setName('模板操作')
-            .setDesc('备份或恢复分区布局')
-            .addButton((btn) =>
-                btn.setButtonText('导出模板').onClick(() => {
-                    this.exportTemplate();
-                })
-            )
-            .addButton((btn) =>
-                btn.setButtonText('导入模板').onClick(() => {
-                    this.importTemplate();
-                })
-            );
-
-        // ── 添加新分区 ──
-        new Setting(containerEl).addButton((btn) =>
-            btn
-                .setButtonText('添加新分区')
-                .setCta()
-                .onClick(async () => {
-                    this.plugin.settings.sections.push({
-                        id: Date.now().toString(),
-                        title: '新分区',
-                        type: 'custom_text',
-                        content: '',
-                    });
-                    await this.plugin.saveSettings();
-                    this.display();
-                })
-        );
+            .setName('配置布局导出与备份')
+            .addButton((b) => b.setButtonText('备份导出配置文件').onClick(() => this.exportTemplate()))
+            .addButton((b) => b.setButtonText('导入还原备份配置').onClick(() => this.importTemplate()));
     }
 
     private exportTemplate(): void {
-        const data = { _version: 1, sections: this.plugin.settings.sections };
+        const data = { _version: 2, settings: this.plugin.settings };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'workpage-template.json';
+        a.download = 'workpage-layout-backup.json';
         a.click();
         URL.revokeObjectURL(url);
-        new Notice('模板已导出');
+        new Notice('WorkPage 备份配置下载成功！');
     }
 
     private importTemplate(): void {
@@ -546,22 +542,17 @@ export class WorkPageSettingTab extends PluginSettingTab {
             if (!file) return;
             try {
                 const text = await file.text();
-                const data = JSON.parse(text) as { sections?: WorkPageSection[] };
-                if (!data.sections || !Array.isArray(data.sections)) {
-                    throw new Error('无效的模板文件：缺少 sections 字段');
+                const data = JSON.parse(text);
+                if (data.settings) {
+                    this.plugin.settings = Object.assign({}, this.plugin.settings, data.settings);
+                    await this.plugin.saveSettings();
+                    this.display();
+                    new Notice('工作台多端配置文件恢复成功！');
+                } else {
+                    throw new Error('不合法的备份格式');
                 }
-                for (const section of data.sections) {
-                    if (!section.id || !section.title || !section.type) {
-                        throw new Error('模板文件格式错误：每个分区必须包含 id、title、type');
-                    }
-                }
-                this.plugin.settings.sections = data.sections;
-                await this.plugin.saveSettings();
-                this.display();
-                new Notice('模板导入成功');
-            } catch (error) {
-                const message = error instanceof Error ? error.message : '未知错误';
-                new Notice(`导入失败：${message}`);
+            } catch (e) {
+                new Notice('导入失败：' + e.message);
             }
         };
         input.click();

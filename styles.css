@@ -320,3 +320,584 @@ If your plugin does not need CSS, delete this file.
 .quick-add-btn--success {
     background: var(--color-green, #4caf50) !important;
 }
+
+/* styles.css - 添加日历样式 */
+
+/* ============================================
+   日历组件样式（优化版）
+   ============================================ */
+
+.workpage-calendar-container {
+    width: 100%;
+}
+
+.workpage-calendar {
+    background: var(--background-primary);
+    border-radius: 16px;
+    padding: 16px;
+    transition: all 0.2s ease;
+}
+
+/* 紧凑模式 */
+.workpage-calendar--compact {
+    padding: 8px;
+}
+
+.workpage-calendar--compact .calendar-day {
+    padding: 6px 4px;
+    min-height: 60px;
+}
+
+.workpage-calendar--compact .calendar-day-number {
+    font-size: 12px;
+}
+
+/* 日历头部 */
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.calendar-nav-area {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.calendar-nav-btn {
+    background: var(--interactive-normal);
+    border: none;
+    border-radius: 8px;
+    width: 32px;
+    height: 32px;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    color: var(--text-normal);
+}
+
+.calendar-nav-btn:hover {
+    background: var(--interactive-hover);
+    transform: scale(1.05);
+}
+
+.calendar-month-label {
+    font-size: 1.2em;
+    font-weight: 600;
+    color: var(--text-accent);
+    min-width: 120px;
+    text-align: center;
+}
+
+.calendar-select-area {
+    display: flex;
+    gap: 8px;
+}
+
+.calendar-year-select,
+.calendar-month-select {
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.85em;
+    color: var(--text-normal);
+    cursor: pointer;
+    outline: none;
+}
+
+.calendar-year-select:hover,
+.calendar-month-select:hover {
+    border-color: var(--interactive-accent);
+}
+
+/* 快捷按钮区域 */
+.calendar-quick-btns {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.calendar-today-btn,
+.calendar-goto-btn {
+    background: var(--interactive-normal);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 0.85em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: var(--text-normal);
+}
+
+.calendar-today-btn:hover,
+.calendar-goto-btn:hover {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border-color: var(--interactive-accent);
+}
+
+.calendar-date-picker {
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 0.85em;
+    color: var(--text-normal);
+    outline: none;
+}
+
+.calendar-date-picker:focus {
+    border-color: var(--interactive-accent);
+}
+
+/* 日历网格 */
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+    margin-top: 8px;
+}
+
+/* 显示周数时的布局 */
+.calendar-grid:has(.calendar-weeknum) {
+    grid-template-columns: 40px repeat(7, 1fr);
+}
+
+.calendar-weekday {
+    text-align: center;
+    padding: 8px 4px;
+    font-weight: 600;
+    font-size: 0.85em;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.calendar-weeknum-header,
+.calendar-weeknum {
+    text-align: center;
+    padding: 8px 4px;
+    font-size: 0.75em;
+    color: var(--text-faint);
+    background: var(--background-secondary);
+    border-radius: 6px;
+    margin: 2px;
+}
+
+.calendar-day {
+    min-height: 85px;
+    padding: 8px 6px;
+    background: var(--background-secondary);
+    border-radius: 12px;
+    transition: all 0.2s ease;
+    position: relative;
+    cursor: default;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.calendar-day:hover {
+    background: var(--background-modifier-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.calendar-day--clickable {
+    cursor: pointer;
+}
+
+.calendar-day--clickable:hover {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+
+.calendar-day--clickable:hover .calendar-day-number {
+    color: var(--text-on-accent);
+}
+
+.calendar-day--other-month {
+    opacity: 0.5;
+    background: var(--background-primary);
+}
+
+.calendar-day--today {
+    border: 2px solid var(--interactive-accent);
+    background: rgba(var(--interactive-accent-rgb), 0.05);
+}
+
+.calendar-day--has-daily {
+    background: linear-gradient(135deg, var(--background-secondary), var(--background-primary-alt));
+}
+
+.calendar-day-number {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-normal);
+    text-align: right;
+}
+
+.calendar-day--today .calendar-day-number {
+    color: var(--interactive-accent);
+}
+
+/* 任务徽章 */
+.calendar-task-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.7em;
+    padding: 2px 6px;
+    border-radius: 12px;
+    width: fit-content;
+}
+
+.calendar-task-badge--done {
+    background: rgba(76, 175, 80, 0.15);
+    color: #4caf50;
+}
+
+.calendar-task-badge--pending {
+    background: rgba(255, 152, 0, 0.15);
+    color: #ff9800;
+}
+
+.calendar-task-badge svg {
+    width: 10px;
+    height: 10px;
+}
+
+/* 进度条 */
+.calendar-progress-bar {
+    width: 100%;
+    height: 3px;
+    background: var(--background-modifier-border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 4px;
+}
+
+.calendar-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--interactive-accent);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+/* 日记指示点 */
+.calendar-daily-dot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.6;
+}
+
+.calendar-daily-dot svg {
+    width: 12px;
+    height: 12px;
+    color: var(--text-accent);
+}
+
+/* 图例 */
+.calendar-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid var(--background-modifier-border);
+}
+
+.calendar-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75em;
+    color: var(--text-muted);
+}
+
+.calendar-legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.calendar-legend-dot.today {
+    border: 2px solid var(--interactive-accent);
+    background: transparent;
+}
+
+.calendar-legend-dot.has-file {
+    background: var(--background-primary-alt);
+}
+
+.calendar-legend-dot.task-done {
+    background: #4caf50;
+}
+
+.calendar-legend-dot.task-pending {
+    background: #ff9800;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .calendar-day {
+        min-height: 65px;
+        padding: 4px;
+    }
+    
+    .calendar-day-number {
+        font-size: 11px;
+    }
+    
+    .calendar-task-badge {
+        font-size: 0.6em;
+        padding: 1px 4px;
+    }
+    
+    .calendar-nav-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 14px;
+    }
+    
+    .calendar-month-label {
+        font-size: 1em;
+        min-width: 100px;
+    }
+}
+
+/* 快速添加栏排版自适应优化 */
+.quick-add-input-wrap {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+}
+
+/* 日期选择器原生优雅样式化 */
+.quick-add-date {
+    flex-shrink: 0;
+    background-color: var(--background-modifier-form-field);
+    border: 1px solid var(--background-modifier-border);
+    color: var(--text-normal);
+    border-radius: var(--input-radius, 6px);
+    padding: 6px 12px;
+    font-family: inherit;
+    font-size: var(--font-ui-small);
+    cursor: pointer;
+}
+
+.quick-add-date:focus {
+    border-color: var(--interactive-accent);
+    outline: none;
+}
+
+/* ==========================================================================
+   全新美化今日看板 - Modern Dashboard 样式
+   ========================================================================== */
+
+.workpage-dashboard-modern {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 4px 0;
+}
+
+/* 1. 极光渐变卡片网格 */
+.modern-dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    width: 100%;
+}
+
+.modern-stat-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 18px 20px;
+    border-radius: 14px;
+    border: 1px solid var(--background-modifier-border);
+    background-color: var(--background-secondary);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.modern-stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+    border-color: var(--interactive-accent-hover);
+}
+
+/* 各类型卡片赋予精致的左侧呼吸视觉线 */
+.modern-stat-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    border-radius: 4px 0 0 4px;
+}
+
+.card-create::before { background: linear-gradient(to bottom, #3b82f6, #60a5fa); }
+.card-modify::before { background: linear-gradient(to bottom, #10b981, #34d399); }
+.card-total::before { background: linear-gradient(to bottom, #8b5cf6, #a78bfa); }
+.card-task::before { background: linear-gradient(to bottom, #f59e0b, #fbbf24); }
+
+/* 卡片内部元信息 */
+.modern-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.modern-stat-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background-color: var(--background-primary-alt);
+    color: var(--text-muted);
+}
+
+/* 当卡片Hover时激活专属高亮颜色 */
+.card-create:hover .modern-stat-icon { color: #3b82f6; background-color: rgba(59, 130, 246, 0.1); }
+.card-modify:hover .modern-stat-icon { color: #10b981; background-color: rgba(16, 185, 129, 0.1); }
+.card-total:hover .modern-stat-icon { color: #8b5cf6; background-color: rgba(139, 92, 246, 0.1); }
+.card-task:hover .modern-stat-icon { color: #f59e0b; background-color: rgba(245, 158, 11, 0.1); }
+
+.modern-stat-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+/* 巨幕数字设计 */
+.modern-stat-value {
+    font-size: 1.85rem;
+    font-weight: 700;
+    color: var(--text-normal);
+    font-family: var(--font-monospace), "SF Pro Display", -apple-system, sans-serif;
+    letter-spacing: -0.5px;
+    line-height: 1.2;
+}
+
+/* 2. 现代目标进度条模块 */
+.modern-progress-container {
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+}
+
+.modern-progress-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.modern-progress-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-normal);
+    margin-bottom: 4px;
+}
+
+.modern-progress-desc {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.modern-progress-percentage {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--interactive-accent);
+    font-family: var(--font-monospace);
+}
+
+/* 进度条轨道 */
+.modern-progress-bar-track {
+    width: 100%;
+    height: 8px;
+    background-color: var(--background-primary-alt);
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+}
+
+/* 进度条精美渐变高光填充 */
+.modern-progress-bar-fill {
+    height: 100%;
+    width: 0%; /* 由 JS 动态控制填充 */
+    background: linear-gradient(90deg, var(--interactive-accent) 0%, #60a5fa 100%);
+    border-radius: 10px;
+    transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+/* 满光标满载彩蛋特效 */
+.progress-complete {
+    background: linear-gradient(90deg, #10b981 0%, #34d399 100%) !important;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+/* 3. 看板无任务时的空白优雅状态 */
+.modern-dashboard-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px 0;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.modern-dashboard-empty .empty-icon {
+    color: #fbbf24;
+    margin-bottom: 8px;
+    animation: floatAnimation 3s ease-in-out infinite;
+}
+
+.modern-dashboard-empty .empty-text {
+    font-size: 0.85rem;
+    font-style: italic;
+}
+
+@keyframes floatAnimation {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-4px); }
+    100% { transform: translateY(0px); }
+}
+
+/* 移动端细调自适应 */
+@media (max-width: 480px) {
+    .modern-stat-value {
+        font-size: 1.6rem;
+    }
+    .modern-progress-info {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    .modern-progress-percentage {
+        align-self: flex-end;
+    }
+}
