@@ -901,3 +901,98 @@ If your plugin does not need CSS, delete this file.
         align-self: flex-end;
     }
 }
+
+/* 顶部标题行弹性布局布局 */
+.workpage-top-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    padding-bottom: 12px;
+}
+.workpage-top-header-row .workpage-header h2 {
+    margin-bottom: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+/* 分段切换按钮组 */
+.workpage-mode-switcher {
+    display: inline-flex;
+    background-color: var(--background-secondary-alt);
+    padding: 4px;
+    border-radius: 8px;
+    border: 1px solid var(--background-modifier-border);
+}
+.mode-switch-btn {
+    background: transparent;
+    border: none;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    border-radius: 6px;
+    cursor: pointer;
+    box-shadow: none;
+    transition: all 0.2s ease;
+}
+.mode-switch-btn:hover {
+    color: var(--text-normal);
+    background-color: var(--background-modifier-hover);
+}
+.mode-switch-btn.is-active {
+    background-color: var(--interactive-accent);
+    color: var(--text-on-accent);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 上课模式冲刺面板样式 */
+.workpage-class-panel {
+    background: linear-gradient(135deg, var(--background-secondary) 0%, var(--background-primary-alt) 100%);
+    border: 1px solid var(--interactive-accent);
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+.class-panel-title {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--interactive-accent);
+}
+.class-panel-form-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+.class-course-select {
+    flex: 0 0 160px;
+    height: 38px;
+    border-radius: 6px;
+}
+.class-content-input {
+    flex: 1;
+    height: 38px;
+    padding: 0 12px;
+    border-radius: 6px;
+    font-size: 14px;
+}
+.class-panel-actions-row {
+    display: flex;
+    gap: 12px;
+}
+.class-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 34px;
+    padding: 0 16px;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 6px;
+    cursor: pointer;
+}

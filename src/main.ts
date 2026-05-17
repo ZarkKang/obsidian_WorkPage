@@ -68,21 +68,48 @@ class WorkPageView extends ItemView {
 
     async onOpen(): Promise<void> { await this.render(); }
 
+    // 辅助方法：确保 Obsidian 多级文件夹存在，避免创建笔记失败
+    private async safeEnsureFolder(folderPath: string): Promise<void> {
+        if (!folderPath) return;
+        const normalizedPath = folderPath.replace(/\/$/, '').trim();
+        if (normalizedPath === '') return;
+        
+        const parts = normalizedPath.split('/');
+        let currentPath = '';
+        for (const part of parts) {
+            currentPath = currentPath ? `${currentPath}/${part}` : part;
+            if (!this.app.vault.getAbstractFileByPath(currentPath)) {
+                await this.app.vault.createFolder(currentPath);
+            }
+        }
+    }
+
     async render(): Promise<void> {
         const container = this.containerEl.children[1] as HTMLElement;
         if (!container) return;
         container.empty();
         container.addClass('workpage-container');
 
-        const header = container.createDiv({ cls: 'workpage-header' });
+        // 1. 顶部标头栏
+        const topHeaderRow = container.createDiv({ cls: 'workpage-top-header-row' });
+        const header = topHeaderRow.createDiv({ cls: 'workpage-header' });
         header.createEl('h2', { text: Platform.isMobile ? '我的工作台 📱' : '我的工作台 🖥️' });
 
+        // 2. 模式切换组件（分段选择器样式）
+        this.renderModeSwitcher(topHeaderRow);
+
+        // 3. 上课模式专属活动面板
+        if (this.plugin.settings.currentMode === 'class') {
+            this.renderClassModePanel(container);
+        }
+
+        // 4. 快速添加栏栏位
         const qa = this.plugin.settings.quickAdd ?? DEFAULT_QUICK_ADD;
         if (qa.enabled && qa.position === 'top') {
             this.renderQuickAdd(container);
         }
 
-        // ── 多端响应式网格大小设置实现 ──
+        // 5. 核心响应式网格卡片排列
         const grid = container.createDiv({ cls: 'workpage-grid' });
         grid.style.display = 'grid';
         grid.style.gap = '16px';
@@ -161,6 +188,160 @@ class WorkPageView extends ItemView {
         if (qa.enabled && qa.position !== 'top') {
             this.renderQuickAdd(container);
         }
+    }
+
+    // 渲染前端模式切换条
+    private renderModeSwitcher(parent: HTMLElement): void {
+        const switcherWrap = parent.createDiv({ cls: 'workpage-mode-switcher' });
+        
+        const normBtn = switcherWrap.createEl('button', { 
+            cls: `mode-switch-btn ${this.plugin.settings.currentMode === 'normal' ? 'is-active' : ''}`,
+            text: '🧠 知识笔记模式' 
+        });
+        const classBtn = switcherWrap.createEl('button', { 
+            cls: `mode-switch-btn ${this.plugin.settings.currentMode === 'class' ? 'is-active' : ''}`,
+            text: '🏫 上课冲刺模式' 
+        });
+
+        normBtn.addEventListener('click', async () => {
+            if (this.plugin.settings.currentMode === 'normal') return;
+            this.plugin.settings.currentMode = 'normal';
+            await this.plugin.saveSettings();
+            await this.render();
+        });
+
+        classBtn.addEventListener('click', async () => {
+            if (this.plugin.settings.currentMode === 'class') return;
+            this.plugin.settings.currentMode = 'class';
+            await this.plugin.saveSettings();
+            await this.render();
+        });
+    }
+
+    // 上课模式核心控制中心
+    private renderClassModePanel(container: HTMLElement): void {
+        const panel = container.createDiv({ cls: 'workpage-class-panel' });
+        panel.createEl('h4', { text: '🏫 课堂闪记控制台', cls: 'class-panel-title' });
+
+        const formRow = panel.createDiv({ cls: 'class-panel-form-row' });
+
+        // 1. 课程联动下拉菜单
+        const select = formRow.createEl('select', { cls: 'class-course-select dropdown' });
+        const courses = this.plugin.settings.courses || [];
+        if (courses.length === 0) {
+            select.createEl('option', { value: '', text: '⚠️ 请先去设置页配置课程' });
+        } else {
+            courses.forEach((c) => {
+                select.createEl('option', { 
+                    value: c.id, 
+                    text: c.name, 
+                    selected: c.id === this.plugin.settings.selectedCourseId 
+                });
+            });
+        }
+        select.addEventListener('change', async () => {
+            this.plugin.settings.selectedCourseId = select.value;
+            await this.plugin.saveSettings();
+        });
+
+        // 2. 主文本标题输入框
+        const input = formRow.createEl('input', { 
+            type: 'text', 
+            placeholder: '输入当堂章节标题、知识要点或概念词...', 
+            cls: 'class-content-input text-input' 
+        });
+
+        // 3. 动作组
+        const actionsRow = panel.createDiv({ cls: 'class-panel-actions-row' });
+
+        const noteBtn = actionsRow.createEl('button', { cls: 'class-action-btn mod-cta' });
+        setIcon(noteBtn.createSpan(), 'file-plus');
+        noteBtn.createSpan({ text: ' 建立新课时笔记' });
+
+        const conceptBtn = actionsRow.createEl('button', { cls: 'class-action-btn' });
+        setIcon(conceptBtn.createSpan(), 'bookmark');
+        conceptBtn.createSpan({ text: ' 捕获核心概念原子' });
+
+        // 创建课时笔记业务逻辑
+        noteBtn.addEventListener('click', async () => {
+            const title = input.value.trim();
+            if (!title) { new Notice('❌ 请先输入课时名称或章节！'); return; }
+            const activeCourse = courses.find(c => c.id === select.value);
+            if (!activeCourse) { new Notice('❌ 未选择合法的课程路径'); return; }
+
+            const todayStr = window.moment().format('YYYY-MM-DD');
+            await this.safeEnsureFolder(activeCourse.folder);
+            const fullPath = `${activeCourse.folder ? `${activeCourse.folder}/` : ''}${todayStr} ${title}.md`;
+
+            if (this.app.vault.getAbstractFileByPath(fullPath)) {
+                new Notice('ℹ️ 该课时文件已存在，已为您直接打开');
+                const file = this.app.vault.getAbstractFileByPath(fullPath);
+                if (file instanceof TFile) await this.app.workspace.getLeaf(false).openFile(file);
+                return;
+            }
+
+            // 专属上课预制模版
+            const template = `---
+type: lecture-note
+course: "${activeCourse.name}"
+date: ${todayStr}
+tags: [上课笔记, ${activeCourse.name}]
+---
+# 🏫 课堂记录：${title}
+- **课程科目**：[[${activeCourse.name}]]
+- **课时时间**：${window.moment().format('YYYY-MM-DD HH:mm')}
+
+---
+
+## 📝 课堂核心大纲
+
+
+## 💡 难点与互动记录
+
+`;
+            const file = await this.app.vault.create(fullPath, template);
+            input.value = '';
+            new Notice(`✅ 课时笔记《${title}》建立成功！`);
+            await this.app.workspace.getLeaf(false).openFile(file);
+        });
+
+        // 快捷记录概念业务逻辑
+        conceptBtn.addEventListener('click', async () => {
+            const conceptName = input.value.trim();
+            if (!conceptName) { new Notice('❌ 请输入概念词！'); return; }
+            const activeCourse = courses.find(c => c.id === select.value);
+            if (!activeCourse) { new Notice('❌ 未选择合法的课程路径'); return; }
+
+            await this.safeEnsureFolder(activeCourse.folder);
+            // 放入课程文件夹的 Concepts/ 子文件夹或直接平铺
+            const fullPath = `${activeCourse.folder ? `${activeCourse.folder}/` : ''}概念-${conceptName}.md`;
+
+            if (this.app.vault.getAbstractFileByPath(fullPath)) {
+                new Notice('ℹ️ 该概念原子已建立');
+                const file = this.app.vault.getAbstractFileByPath(fullPath);
+                if (file instanceof TFile) await this.app.workspace.getLeaf(false).openFile(file);
+                return;
+            }
+
+            const template = `---
+type: concept
+course: "${activeCourse.name}"
+tags: [核心概念, ${activeCourse.name}]
+---
+# 💡 概念：${conceptName}
+- 所属域：[[${activeCourse.name}]]
+
+### 🔍 权威定义与内涵
+
+
+### 📝 通俗解读 / 联想记忆
+
+`;
+            const file = await this.app.vault.create(fullPath, template);
+            input.value = '';
+            new Notice(`✅ 核心概念《${conceptName}》原子捕获成功！`);
+            await this.app.workspace.getLeaf(false).openFile(file);
+        });
     }
 
     private async renderTasks(content: HTMLElement): Promise<void> {
@@ -315,7 +496,6 @@ class WorkPageView extends ItemView {
         const totalTasks = doneTasks + pendingTasks;
         const donePercent = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
 
-        // 1. 统计卡片网格
         const statsGrid = content.createDiv({ cls: 'modern-dashboard-grid' });
         const stats = [
             { icon: 'file-plus', label: '今日灵感新建', value: String(createdToday), type: 'create' },
@@ -326,40 +506,27 @@ class WorkPageView extends ItemView {
 
         stats.forEach(({ icon, label, value, type }) => {
             const card = statsGrid.createDiv({ cls: `modern-stat-card card-${type}` });
-            
-            // 内部左侧/上方：图标 + 标签
             const metaWrap = card.createDiv({ cls: 'modern-card-meta' });
             const iconEl = metaWrap.createDiv({ cls: 'modern-stat-icon' });
             setIcon(iconEl, icon);
             metaWrap.createDiv({ cls: 'modern-stat-label', text: label });
-            
-            // 内部右侧/下方：巨幕数字
             card.createDiv({ cls: 'modern-stat-value', text: value });
         });
 
-        // 2. 环形/条形进度模块美化
         const progressContainer = content.createDiv({ cls: 'modern-progress-container' });
         if (totalTasks > 0) {
             const progressInfo = progressContainer.createDiv({ cls: 'modern-progress-info' });
-            
-            // 左侧文本
             const textGroup = progressInfo.createDiv({ cls: 'modern-progress-text-group' });
             textGroup.createDiv({ cls: 'modern-progress-title' }).setText('今日目标达成率');
             textGroup.createDiv({ cls: 'modern-progress-desc' }).setText(`已关闭 ${doneTasks} 项就绪任务，剩余 ${pendingTasks} 项推进中`);
-            
-            // 右侧百分比高亮
             progressInfo.createDiv({ cls: 'modern-progress-percentage', text: `${donePercent}%` });
 
-            // 进度条槽
             const bar = progressContainer.createDiv({ cls: 'modern-progress-bar-track' });
             const fill = bar.createDiv({ cls: 'modern-progress-bar-fill' });
             
-            // 优雅的填充动画效果触发
             setTimeout(() => { 
                 fill.style.width = `${donePercent}%`; 
-                if (donePercent === 100) {
-                    fill.addClass('progress-complete');
-                }
+                if (donePercent === 100) fill.addClass('progress-complete');
             }, 100);
         } else {
             const emptyState = progressContainer.createDiv({ cls: 'modern-dashboard-empty' });
@@ -606,21 +773,161 @@ class WorkPageView extends ItemView {
     }
 
     private renderTagCloud(content: HTMLElement, section: WorkPageSection): void {
-        const allTags = this.app.metadataCache.getTags();
-        if (!allTags || Object.keys(allTags).length === 0) {
-            content.createEl('p', { text: '仓库中暂无标签', cls: 'no-data' });
-            return;
+            const allTags = this.app.metadataCache.getTags();
+            if (!allTags || Object.keys(allTags).length === 0) {
+                content.empty();
+                content.createEl('p', { text: '仓库中暂无标签', cls: 'no-data' });
+                return;
+            }
+
+            // 读取新、旧策略配置，确保无缝平滑迁移
+            const cfg = section.tagCloudConfig || {
+                tagMaxCount: section.tagMaxCount || 30,
+                minTagCount: 1,
+                sortBy: 'frequency',
+                showCount: true,
+                colorMode: 'colorful',
+                excludeTags: ''
+            };
+
+            const maxTags = cfg.tagMaxCount ?? 30;
+            const minCountCutoff = cfg.minTagCount ?? 1;
+            const sortBy = cfg.sortBy ?? 'frequency';
+            const showCount = cfg.showCount ?? true;
+            const colorMode = cfg.colorMode ?? 'colorful';
+            const excludeStr = cfg.excludeTags ?? '';
+
+            // 1. 根据规则过滤标签（排除词与低频剔除）
+            const excludes = excludeStr.split(',').map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
+            let entries = Object.entries(allTags);
+
+            if (excludes.length > 0) {
+                entries = entries.filter(([tag]) => {
+                    const cleanTag = tag.replace(/^#/, '').toLowerCase();
+                    const rawTag = tag.toLowerCase();
+                    return !excludes.some(ex => cleanTag === ex || rawTag === ex || cleanTag.includes(ex));
+                });
+            }
+
+            if (minCountCutoff > 1) {
+                entries = entries.filter(([_, count]) => count >= minCountCutoff);
+            }
+
+            if (entries.length === 0) {
+                content.empty();
+                content.createEl('p', { text: '没有匹配的过滤标签', cls: 'no-data' });
+                return;
+            }
+
+            // 2. 核心权重裁剪：始终先选出引用最高频的前 N 个标签
+            entries.sort((a, b) => b[1] - a[1]);
+            entries = entries.slice(0, maxTags);
+
+            // 计算当前集合的上下极值，用于权重无缝比例换算
+            const counts = entries.map(([_, c]) => c);
+            const maxC = Math.max(...counts);
+            const minC = Math.min(...counts);
+
+            // 3. 按照用户偏好，重组排列云顺序
+            if (sortBy === 'alphabetical') {
+                entries.sort((a, b) => a[0].localeCompare(b[0]));
+            } else if (sortBy === 'random') {
+                entries.sort(() => Math.random() - 0.5);
+            }
+
+            // 4. 清空并开始渲染精美的网格云视图
+            content.empty();
+            const cloudWrap = content.createDiv({ cls: 'tag-cloud-wrap' });
+            cloudWrap.style.cssText = 'display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; padding: 12px; line-height: 1.6;';
+
+            // 探测暗黑/明亮环境
+            const isDark = document.body.classList.contains('theme-dark');
+
+            entries.forEach(([tag, count]) => {
+                // 计算权重比（0 ~ 1）
+                const weight = maxC === minC ? 0.5 : (count - minC) / (maxC - minC);
+                // 字体映射范围：从 0.85rem(基础小字) 线性映射到 1.6rem(超级大词)
+                const fontSize = 0.85 + weight * 0.75;
+
+                const displayText = showCount ? `${tag} (${count})` : tag;
+                const tagEl = cloudWrap.createSpan({ cls: 'tag-cloud-item', text: displayText });
+                
+                // 基础框架物理结构样式
+                tagEl.style.fontSize = `${fontSize}rem`;
+                tagEl.style.display = 'inline-block';
+                tagEl.style.padding = '3px 8px';
+                tagEl.style.borderRadius = '6px';
+                tagEl.style.cursor = 'pointer';
+                tagEl.style.userSelect = 'none';
+                tagEl.style.transition = 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)';
+
+                // 计算色彩学 HSL 唯一色相
+                const hash = [...tag].reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                const hue = hash % 360;
+                const lightness = isDark ? 68 : 42; // 明暗环境对比度友好亮度
+
+                // 5. 应用色彩视觉模式
+                if (colorMode === 'accent') {
+                    // 主题高亮渐变：完美贴合 Obsidian 强调色，配合不透明度虚实呼应
+                    tagEl.style.color = 'var(--text-accent)';
+                    tagEl.style.backgroundColor = 'var(--background-secondary)';
+                    tagEl.style.border = '1px solid var(--text-accent)';
+                    tagEl.style.opacity = `${0.55 + weight * 0.45}`;
+                } else if (colorMode === 'colorful') {
+                    // 多彩美学：既具备糖果色的丰富感，同时具有完美的文字阅读对比度
+                    tagEl.style.backgroundColor = `hsla(${hue}, 70%, ${lightness}%, 0.12)`;
+                    tagEl.style.color = `hsl(${hue}, 75%, ${lightness}%)`;
+                    tagEl.style.border = `1px solid hsla(${hue}, 70%, ${lightness}%, 0.15)`;
+                } else {
+                    // 原生纯净模式：干净低调
+                    tagEl.style.color = weight > 0.5 ? 'var(--text-normal)' : 'var(--text-muted)';
+                    tagEl.style.backgroundColor = 'var(--background-secondary)';
+                    tagEl.style.border = '1px solid var(--border-color)';
+                }
+
+                // 6. 精致的悬停交互微动效（Hover Interactions）
+                tagEl.addEventListener('mouseenter', () => {
+                    tagEl.style.transform = 'translateY(-2px) scale(1.04)';
+                    tagEl.style.boxShadow = '0 5px 12px rgba(0, 0, 0, 0.08)';
+                    
+                    if (colorMode === 'accent') {
+                        tagEl.style.backgroundColor = 'var(--text-accent)';
+                        tagEl.style.color = 'var(--background-primary)';
+                        tagEl.style.opacity = '1';
+                    } else if (colorMode === 'colorful') {
+                        tagEl.style.backgroundColor = `hsl(${hue}, 70%, ${isDark ? 62 : 46}%)`;
+                        tagEl.style.color = '#ffffff';
+                    } else {
+                        tagEl.style.backgroundColor = 'var(--background-modifier-hover)';
+                        tagEl.style.color = 'var(--text-normal)';
+                    }
+                });
+
+                tagEl.addEventListener('mouseleave', () => {
+                    tagEl.style.transform = 'none';
+                    tagEl.style.boxShadow = 'none';
+
+                    if (colorMode === 'accent') {
+                        tagEl.style.color = 'var(--text-accent)';
+                        tagEl.style.backgroundColor = 'var(--background-secondary)';
+                        tagEl.style.opacity = `${0.55 + weight * 0.45}`;
+                    } else if (colorMode === 'colorful') {
+                        tagEl.style.backgroundColor = `hsla(${hue}, 70%, ${lightness}%, 0.12)`;
+                        tagEl.style.color = `hsl(${hue}, 75%, ${lightness}%)`;
+                    } else {
+                        tagEl.style.color = weight > 0.5 ? 'var(--text-normal)' : 'var(--text-muted)';
+                        tagEl.style.backgroundColor = 'var(--background-secondary)';
+                    }
+                });
+
+                // 7. 点击绑定内置核心跳转检索
+                tagEl.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    void this.app.workspace.openLinkText(tag, '', false);
+                });
+            });
         }
-        const sorted = Object.entries(allTags).sort((a, b) => b[1] - a[1]).slice(0, section.tagMaxCount || 30);
-        const cloudWrap = content.createDiv({ cls: 'tag-cloud-wrap' });
 
-        sorted.forEach(([tag, count]) => {
-            const tagEl = cloudWrap.createSpan({ cls: 'tag-cloud-item', text: `${tag} (${count})` });
-            tagEl.addEventListener('click', () => { void this.app.workspace.openLinkText(tag, '', false); });
-        });
-    }
-
-    // ── 核心改造：新增日期选择控件并支持定向写入 ──
     renderQuickAdd(container: HTMLElement): void {
         const qa = this.plugin.settings.quickAdd ?? DEFAULT_QUICK_ADD;
         if (!qa.enabled) return;
@@ -628,12 +935,10 @@ class WorkPageView extends ItemView {
         const quickDiv = container.createDiv({ cls: 'workpage-quick-add' });
         const inputWrap = quickDiv.createDiv({ cls: 'quick-add-input-wrap' });
         
-        // 1. 新增原生日期选择器
         const dateInput = inputWrap.createEl('input', { 
             type: 'date', 
             cls: 'quick-add-date' 
         });
-        // 默认设置为当天日期 (格式：YYYY-MM-DD)
         dateInput.value = window.moment().format('YYYY-MM-DD');
         
         const input = inputWrap.createEl('input', { type: 'text', placeholder: qa.placeholder, cls: 'quick-add-input' });
@@ -641,7 +946,7 @@ class WorkPageView extends ItemView {
 
         const add = async () => {
             const text = input.value.trim();
-            const selectedDate = dateInput.value; // 获取用户设定的日期字符串
+            const selectedDate = dateInput.value;
             if (!text) return;
             
             await this.addTaskToDate(text, selectedDate);
@@ -667,7 +972,6 @@ class WorkPageView extends ItemView {
         if (taskText) void this.addTaskToDate(taskText);
     }
 
-    // ── 核心改造：重构支持按特定日期写入对应日记文件 ──
     async addTaskToDate(taskText: string, targetDateStr?: string): Promise<void> {
         const dailyPlugin = this.app.internalPlugins.getEnabledPluginById('daily-notes');
         if (!dailyPlugin) {
@@ -676,7 +980,6 @@ class WorkPageView extends ItemView {
         }
 
         const { folder, format } = dailyPlugin.options;
-        // 如果传入了日期，基于 YYYY-MM-DD 进行解析，否则回退默认至今天
         const targetMoment = targetDateStr ? window.moment(targetDateStr, 'YYYY-MM-DD') : window.moment();
         const dateFileName = targetMoment.format(format || 'YYYY-MM-DD');
         const filePath = `${folder ? `${folder}/` : ''}${dateFileName}.md`;

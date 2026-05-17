@@ -22,6 +22,16 @@ export interface CalendarConfig {
     folderPath?: string;
 }
 
+// ── 新增：标签云专属高级配置接口 ──
+export interface TagCloudConfig {
+    tagMaxCount?: number;       // 最大显示标签数
+    minTagCount?: number;       // 最小使用次数过滤
+    sortBy?: 'frequency' | 'alphabetical' | 'random'; // 排序依据
+    showCount?: boolean;        // 是否显示引用数量
+    colorMode?: 'default' | 'accent' | 'colorful';    // 视觉色彩模式
+    excludeTags?: string;       // 排除的标签关键字（逗号分隔）
+}
+
 export interface QuickAddSettings {
     enabled: boolean;
     placeholder: string;
@@ -47,8 +57,9 @@ export interface WorkPageSection {
     buttons?: WorkPageButton[];
     scratchpadTarget?: 'daily' | 'new' | 'append'; // 草稿保存目标
     scratchpadFile?: string;     // 草稿目标文件
-    tagMaxCount?: number;       // 最大标签数
+    tagMaxCount?: number;       // 最大标签数 (保留向下兼容)
     calendarConfig?: CalendarConfig; // 日历专属配置
+    tagCloudConfig?: TagCloudConfig; // ── 新增：标签云专属配置 ──
 }
 
 export interface MyPluginSettings {
@@ -97,7 +108,6 @@ export const DEFAULT_SETTINGS: MyPluginSettings = {
     quickAdd: { ...DEFAULT_QUICK_ADD },
 };
 
-// 策略导出助手：获取或判定当前终端应渲染的分区
 export function getCurrentSections(settings: MyPluginSettings): WorkPageSection[] {
     if (!settings.useSeparateLayouts) {
         return settings.sections || [];
@@ -133,7 +143,6 @@ export class WorkPageSettingTab extends PluginSettingTab {
                     })
             );
 
-        // 如果开启双端分立，允许在设置界面内手动切换配置的目标端
         let activeSections = this.plugin.settings.sections;
         if (this.plugin.settings.useSeparateLayouts) {
             new Setting(containerEl)
@@ -158,7 +167,6 @@ export class WorkPageSettingTab extends PluginSettingTab {
             const secHeader = containerEl.createEl('h4', { text: `分区 ${index + 1}: ${section.title || '未命名'}` });
             secHeader.style.marginTop = '20px';
 
-            // ── 分区基础设置 ──
             new Setting(containerEl)
                 .setName('名称与组件类型')
                 .setDesc('修改分区标题及展示的组件')
@@ -184,8 +192,11 @@ export class WorkPageSettingTab extends PluginSettingTab {
                         .setValue(section.type)
                         .onChange(async (value: WorkPageSection['type']) => {
                             section.type = value;
-                            // 重置对应专属属性的初值
                             if (value === 'calendar' && !section.calendarConfig) section.calendarConfig = {};
+                            // ── 新增：初始化标签云默认参数 ──
+                            if (value === 'tag_cloud' && !section.tagCloudConfig) {
+                                section.tagCloudConfig = { tagMaxCount: 30, minTagCount: 1, sortBy: 'frequency', showCount: true, colorMode: 'colorful', excludeTags: '' };
+                            }
                             await this.plugin.saveSettings();
                             this.display();
                         })
@@ -206,7 +217,6 @@ export class WorkPageSettingTab extends PluginSettingTab {
                         })
                 );
 
-            // ── 分区尺寸/跨度设置（大小配置） ──
             new Setting(containerEl)
                 .setName('组件跨列大小 (Grid Span)')
                 .setDesc('在电脑端网格系统内占用的列宽（1~3列。注：手机端始终会自动紧凑平铺为1列）')
@@ -221,7 +231,6 @@ export class WorkPageSettingTab extends PluginSettingTab {
                         })
                 );
 
-            // ── recent_files 专属 ──
             if (section.type === 'recent_files') {
                 new Setting(containerEl)
                     .setName('最大显示数量')
@@ -275,7 +284,6 @@ export class WorkPageSettingTab extends PluginSettingTab {
                     );
             }
 
-            // ── file_list 专属 ──
             if (section.type === 'file_list') {
                 new Setting(containerEl)
                     .setName('目标文件夹')
@@ -313,7 +321,6 @@ export class WorkPageSettingTab extends PluginSettingTab {
                     );
             }
 
-            // ── custom_text 专属 ──
             if (section.type === 'custom_text') {
                 new Setting(containerEl)
                     .setName('自定义 Markdown 内容')
@@ -327,7 +334,6 @@ export class WorkPageSettingTab extends PluginSettingTab {
                     );
             }
 
-            // ── scratchpad 专属 ──
             if (section.type === 'scratchpad') {
                 new Setting(containerEl)
                     .setName('保存目标')
@@ -359,23 +365,104 @@ export class WorkPageSettingTab extends PluginSettingTab {
                 }
             }
 
-            // ── tag_cloud 专属 ──
+            // ── 重构升级：提供极为丰富的标签云专属面板设置 ──
             if (section.type === 'tag_cloud') {
+                if (!section.tagCloudConfig) {
+                    section.tagCloudConfig = {
+                        tagMaxCount: section.tagMaxCount || 30,
+                        minTagCount: 1,
+                        sortBy: 'frequency',
+                        showCount: true,
+                        colorMode: 'colorful',
+                        excludeTags: ''
+                    };
+                }
+
                 new Setting(containerEl)
                     .setName('最多显示标签数')
+                    .setDesc('控制标签云截取的最高频核心标签总量。')
                     .addSlider((slider) =>
                         slider
                             .setLimits(5, 100, 5)
-                            .setValue(section.tagMaxCount || 30)
+                            .setValue(section.tagCloudConfig.tagMaxCount ?? 30)
                             .setDynamicTooltip()
                             .onChange(async (value) => {
-                                section.tagMaxCount = value;
+                                section.tagCloudConfig!.tagMaxCount = value;
+                                section.tagMaxCount = value; // 向上兼容
+                                await this.plugin.saveSettings();
+                            })
+                    );
+
+                new Setting(containerEl)
+                    .setName('最小使用频次过滤')
+                    .setDesc('过滤掉引用次数低于该数值的冷门、孤儿标签。')
+                    .addSlider((slider) =>
+                        slider
+                            .setLimits(1, 20, 1)
+                            .setValue(section.tagCloudConfig.minTagCount ?? 1)
+                            .setDynamicTooltip()
+                            .onChange(async (value) => {
+                                section.tagCloudConfig!.minTagCount = value;
+                                await this.plugin.saveSettings();
+                            })
+                    );
+
+                new Setting(containerEl)
+                    .setName('标签云排序规则')
+                    .setDesc('处理截取集合后的最终界面平铺排列顺序。')
+                    .addDropdown((drop) =>
+                        drop
+                            .addOption('frequency', '按使用频率 (从高到低)')
+                            .addOption('alphabetical', '按字母顺序 (A-Z)')
+                            .addOption('random', '随机混淆混淆 (错落美感)')
+                            .setValue(section.tagCloudConfig.sortBy ?? 'frequency')
+                            .onChange(async (value: any) => {
+                                section.tagCloudConfig!.sortBy = value;
+                                await this.plugin.saveSettings();
+                            })
+                    );
+
+                new Setting(containerEl)
+                    .setName('视觉色彩表现模式')
+                    .setDesc('选择标签的外观渲染色系。')
+                    .addDropdown((drop) =>
+                        drop
+                            .addOption('default', '原生纯净模式')
+                            .addOption('accent', '主题强调色高亮渐变')
+                            .addOption('colorful', '绚丽多彩美学 (双端适配)')
+                            .setValue(section.tagCloudConfig.colorMode ?? 'colorful')
+                            .onChange(async (value: any) => {
+                                section.tagCloudConfig!.colorMode = value;
+                                await this.plugin.saveSettings();
+                            })
+                    );
+
+                new Setting(containerEl)
+                    .setName('显示标签被引用次数')
+                    .setDesc('开启后将在文本右侧展现数字小括号，例如 #读书 (12)。')
+                    .addToggle((toggle) =>
+                        toggle
+                            .setValue(section.tagCloudConfig.showCount ?? true)
+                            .onChange(async (value) => {
+                                section.tagCloudConfig!.showCount = value;
+                                await this.plugin.saveSettings();
+                            })
+                    );
+
+                new Setting(containerEl)
+                    .setName('排除/忽略指定标签')
+                    .setDesc('输入不希望在看板内显现的标签关键词，用英文逗号分隔（如: todo, temp）。')
+                    .addText((text) =>
+                        text
+                            .setPlaceholder('todo, encrypted')
+                            .setValue(section.tagCloudConfig.excludeTags || '')
+                            .onChange(async (value) => {
+                                section.tagCloudConfig!.excludeTags = value;
                                 await this.plugin.saveSettings();
                             })
                     );
             }
 
-            // ── calendar 专属（已正确修复挪回此处展示视图控件） ──
             if (section.type === 'calendar') {
                 if (!section.calendarConfig) section.calendarConfig = {};
 
@@ -439,7 +526,6 @@ export class WorkPageSettingTab extends PluginSettingTab {
                     );
             }
 
-            // ── 快捷按钮配置 ──
             const btnWrap = containerEl.createDiv();
             btnWrap.createEl('h5', { text: '⚙️ 区域快捷按钮配置' });
             if (!section.buttons) section.buttons = [];
@@ -472,7 +558,6 @@ export class WorkPageSettingTab extends PluginSettingTab {
             containerEl.createEl('hr');
         });
 
-        // ── 添加新分区 ──
         new Setting(containerEl).addButton((btn) =>
             btn
                 .setButtonText('+ 创建新页面分区')
@@ -490,7 +575,6 @@ export class WorkPageSettingTab extends PluginSettingTab {
                 })
         );
 
-        // ── 快速添加待办设置 ──
         new Setting(containerEl).setName('工作台快速添加栏配置').setHeading();
         new Setting(containerEl)
             .setName('启用顶部/底部快速添加输入框')
@@ -510,7 +594,6 @@ export class WorkPageSettingTab extends PluginSettingTab {
                 .addDropdown((drop) => drop.addOption('bottom', '容器底部').addOption('top', '容器顶部').setValue(this.plugin.settings.quickAdd.position).onChange(async (v: any) => { this.plugin.settings.quickAdd.position = v; await this.plugin.saveSettings(); }));
         }
 
-        // ── 启动行为与模板 ──
         new Setting(containerEl).setName('全局环境与模板行为').setHeading();
         new Setting(containerEl).setName('软件启动时默认打开 WorkPage').addToggle((t) => t.setValue(this.plugin.settings.openOnStartup).onChange(async (v) => { this.plugin.settings.openOnStartup = v; await this.plugin.saveSettings(); }));
         new Setting(containerEl).setName('没有活跃标签页时强制回归 WorkPage').addToggle((t) => t.setValue(this.plugin.settings.openWhenEmpty).onChange(async (v) => { this.plugin.settings.openWhenEmpty = v; await this.plugin.saveSettings(); }));
