@@ -16,6 +16,7 @@ import {
     WorkPageButton,
     WorkPageSection,
     getCurrentSections,
+    Course,
 } from './settings';
 
 const VIEW_TYPE_WORKPAGE = 'work-page-view';
@@ -376,8 +377,16 @@ tags: [核心概念, ${activeCourse.name}]
                             }
                         });
 
-                        const displayText = task.text.replace(/^\s*-\s*\[[ xX]?\]\s*/, '').trim();
-                        const nameSpan = li.createSpan({ text: displayText, cls: 'item-name workpage-task-text' });
+                        // 移除截止时间标记后显示任务文本
+                        const displayText = task.text
+                            .replace(/^\s*-\s*\[[ xX]?\]\s*/, '')
+                            .replace(/\s*\[due::\s*\d{4}-\d{2}-\d{2}\]\s*$/, '')
+                            .trim();
+                        
+                        const itemContent = li.createDiv({ cls: 'workpage-task-content' });
+                        itemContent.style.cssText = 'flex: 1; display: flex; align-items: center; gap: 8px;';
+                        
+                        const nameSpan = itemContent.createSpan({ text: displayText, cls: 'item-name workpage-task-text' });
                         nameSpan.addEventListener('click', () => {
                             const leaf = this.app.workspace.getLeaf(false);
                             void leaf.openFile(task.file).then(() => {
@@ -385,6 +394,34 @@ tags: [核心概念, ${activeCourse.name}]
                                 if (editor) editor.setCursor({ line: task.line, ch: 0 });
                             });
                         });
+
+                        // 显示截止时间标签
+                        if (task.dueDate) {
+                            const dueBadge = itemContent.createSpan({ cls: 'task-due-badge' });
+                            const dueDate = window.moment(task.dueDate, 'YYYY-MM-DD');
+                            const today = window.moment();
+                            const daysLeft = dueDate.diff(today, 'days');
+                            
+                            let badgeClass = 'task-due-normal';
+                            let badgeText = `📅 ${task.dueDate}`;
+                            
+                            if (daysLeft < 0) {
+                                badgeClass = 'task-due-overdue';
+                                badgeText = `⚠️ 已逾期 ${Math.abs(daysLeft)}天`;
+                            } else if (daysLeft === 0) {
+                                badgeClass = 'task-due-today';
+                                badgeText = '🔴 今日截止';
+                            } else if (daysLeft <= 3) {
+                                badgeClass = 'task-due-urgent';
+                                badgeText = `⏰ ${daysLeft}天后截止`;
+                            } else {
+                                badgeClass = 'task-due-normal';
+                                badgeText = `📅 ${daysLeft}天后`;
+                            }
+                            
+                            dueBadge.setText(badgeText);
+                            dueBadge.addClass(badgeClass);
+                        }
                     });
                 }
             })
@@ -937,23 +974,43 @@ tags: [核心概念, ${activeCourse.name}]
         
         const dateInput = inputWrap.createEl('input', { 
             type: 'date', 
-            cls: 'quick-add-date' 
+            cls: 'quick-add-date',
+            title: '任务要添加到哪一天的日记'
         });
         dateInput.value = window.moment().format('YYYY-MM-DD');
         
-        const input = inputWrap.createEl('input', { type: 'text', placeholder: qa.placeholder, cls: 'quick-add-input' });
+        const input = inputWrap.createEl('input', { 
+            type: 'text', 
+            placeholder: qa.placeholder, 
+            cls: 'quick-add-input',
+            title: '输入任务内容'
+        });
+        
+        const dueDateInput = inputWrap.createEl('input', {
+            type: 'date',
+            cls: 'quick-add-due-date',
+            title: '任务截止时间（可选）'
+        });
+        
         const btn = inputWrap.createEl('button', { cls: 'quick-add-btn', text: qa.buttonText });
 
         const add = async () => {
             const text = input.value.trim();
             const selectedDate = dateInput.value;
+            const dueDate = dueDateInput.value; // 可能为空
             if (!text) return;
             
-            await this.addTaskToDate(text, selectedDate);
+            await this.addTaskToDate(text, selectedDate, dueDate || undefined);
             input.value = '';
-            if (qa.showSuccessNotice) new Notice(`✅ 已成功添加待办至日记 (${selectedDate})`);
+            dueDateInput.value = ''; // 重置截止日期输入
+            if (qa.showSuccessNotice) {
+                let msg = `✅ 已成功添加待办至日记 (${selectedDate})`;
+                if (dueDate) msg += ` • 截止: ${dueDate}`;
+                new Notice(msg);
+            }
             await this.render();
         };
+        
         btn.addEventListener('click', () => { void add(); });
         input.addEventListener('keydown', (e) => { if (e.key === 'Enter') void add(); });
     }
@@ -972,7 +1029,7 @@ tags: [核心概念, ${activeCourse.name}]
         if (taskText) void this.addTaskToDate(taskText);
     }
 
-    async addTaskToDate(taskText: string, targetDateStr?: string): Promise<void> {
+    async addTaskToDate(taskText: string, targetDateStr?: string, dueDate?: string): Promise<void> {
         const dailyPlugin = this.app.internalPlugins.getEnabledPluginById('daily-notes');
         if (!dailyPlugin) {
             new Notice('错误：请先开启 Obsidian 自带的"日记"核心插件');
@@ -992,8 +1049,15 @@ tags: [核心概念, ${activeCourse.name}]
         const cleanText = taskText.replace(/^\s*-\s*\[[ xX]?\]\s*/, '').trim();
         if (!cleanText) return;
 
+        // 构建任务行，包含截止时间
+        let taskLine = `- [ ] ${cleanText}`;
+        if (dueDate) {
+            const dueDateFormatted = window.moment(dueDate).format('YYYY-MM-DD');
+            taskLine += ` [due:: ${dueDateFormatted}]`;
+        }
+
         const currentContent = await this.app.vault.read(file as TFile);
-        const newContent = currentContent ? `${currentContent}\n- [ ] ${cleanText}` : `- [ ] ${cleanText}`;
+        const newContent = currentContent ? `${currentContent}\n${taskLine}` : taskLine;
         await this.app.vault.modify(file as TFile, newContent);
     }
 
@@ -1006,8 +1070,8 @@ tags: [核心概念, ${activeCourse.name}]
         await this.app.vault.modify(file, lines.join('\n'));
     }
 
-    async getTodayTasks(): Promise<{ file: TFile; line: number; text: string }[]> {
-        const tasks: { file: TFile; line: number; text: string }[] = [];
+    async getTodayTasks(): Promise<{ file: TFile; line: number; text: string; dueDate?: string; isOverdue?: boolean }[]> {
+        const tasks: { file: TFile; line: number; text: string; dueDate?: string; isOverdue?: boolean }[] = [];
         const dailyPlugin = this.app.internalPlugins.getEnabledPluginById('daily-notes');
         if (!dailyPlugin) return tasks;
 
@@ -1020,10 +1084,36 @@ tags: [核心概念, ${activeCourse.name}]
 
         const content = await this.app.vault.read(file);
         const lines = content.split('\n');
+        const dueFormat = this.plugin.settings.taskDueDateFormat || '[due:: YYYY-MM-DD]';
+        const dueDateRegex = /\[due::\s*(\d{4}-\d{2}-\d{2})\]/;
+        
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
             if (line && /^\s*-\s*\[ \]/.test(line)) {
-                tasks.push({ file, line: i, text: line.trim() });
+                // 提取截止日期
+                const dueDateMatch = line.match(dueDateRegex);
+                const dueDate = dueDateMatch ? dueDateMatch[1] : undefined;
+                
+                // 判断是否过期
+                let isOverdue = false;
+                if (dueDate) {
+                    const due = window.moment(dueDate, 'YYYY-MM-DD');
+                    const now = window.moment();
+                    isOverdue = now.isAfter(due, 'day');
+                }
+                
+                // 如果启用了逾期过滤，跳过已过期的任务
+                if (this.plugin.settings.showOverdueTasks !== false && isOverdue) {
+                    continue;
+                }
+                
+                tasks.push({ 
+                    file, 
+                    line: i, 
+                    text: line.trim(),
+                    dueDate,
+                    isOverdue 
+                });
             }
         }
         return tasks;
@@ -1066,6 +1156,10 @@ export default class MyPlugin extends Plugin {
         const data = await this.loadData();
         this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
         if (data?.quickAdd) this.settings.quickAdd = Object.assign({}, DEFAULT_QUICK_ADD, data.quickAdd);
+        // 确保上课模式相关字段始终有合法初始值
+        if (!this.settings.courses) this.settings.courses = [];
+        if (!this.settings.currentMode) this.settings.currentMode = 'normal';
+        if (this.settings.selectedCourseId === undefined) this.settings.selectedCourseId = '';
     }
 
     async saveSettings(): Promise<void> {

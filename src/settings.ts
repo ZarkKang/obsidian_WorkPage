@@ -62,6 +62,13 @@ export interface WorkPageSection {
     tagCloudConfig?: TagCloudConfig; // ── 新增：标签云专属配置 ──
 }
 
+// ── 课程管理：每个课程的数据结构 ──
+export interface Course {
+    id: string;
+    name: string;   // 课程名称，显示在下拉菜单
+    folder: string; // 笔记存储文件夹路径
+}
+
 export interface MyPluginSettings {
     sections: WorkPageSection[];        // 单一布局数据（向下兼容）
     desktopSections: WorkPageSection[]; // 电脑端专用独立布局数据
@@ -70,6 +77,13 @@ export interface MyPluginSettings {
     openOnStartup: boolean;
     openWhenEmpty: boolean;
     quickAdd: QuickAddSettings;
+    // ── 上课模式专属 ──
+    currentMode: 'normal' | 'class';   // 当前工作台模式
+    courses: Course[];                  // 已配置的课程列表
+    selectedCourseId: string;           // 当前选中课程的 ID
+    // ── 任务截止时间 ──
+    showOverdueTasks?: boolean;         // 是否在待办中显示逾期任务
+    taskDueDateFormat?: string;         // 任务截止时间标记格式 (default: '[due:: YYYY-MM-DD]')
 }
 
 export const DEFAULT_QUICK_ADD: QuickAddSettings = {
@@ -106,6 +120,11 @@ export const DEFAULT_SETTINGS: MyPluginSettings = {
     openOnStartup: false,
     openWhenEmpty: false,
     quickAdd: { ...DEFAULT_QUICK_ADD },
+    currentMode: 'normal',
+    courses: [],
+    selectedCourseId: '',
+    showOverdueTasks: true,  // 默认显示逾期任务
+    taskDueDateFormat: '[due:: YYYY-MM-DD]', // 截止时间格式
 };
 
 export function getCurrentSections(settings: MyPluginSettings): WorkPageSection[] {
@@ -575,6 +594,66 @@ export class WorkPageSettingTab extends PluginSettingTab {
                 })
         );
 
+        new Setting(containerEl).setName('🏫 上课冲刺模式 · 课程管理').setHeading();
+        new Setting(containerEl)
+            .setName('课程列表')
+            .setDesc('在上课模式的"课堂闪记控制台"中，课程下拉菜单的选项来源于此处的配置。');
+
+        const courses = this.plugin.settings.courses || [];
+        courses.forEach((course, idx) => {
+            new Setting(containerEl)
+                .setName(`课程 ${idx + 1}`)
+                .addText((t) =>
+                    t
+                        .setPlaceholder('课程名称（如：高等数学）')
+                        .setValue(course.name)
+                        .onChange(async (v) => {
+                            course.name = v;
+                            await this.plugin.saveSettings();
+                        })
+                )
+                .addText((t) =>
+                    t
+                        .setPlaceholder('笔记文件夹（如：课程/数学）')
+                        .setValue(course.folder)
+                        .onChange(async (v) => {
+                            course.folder = v;
+                            await this.plugin.saveSettings();
+                        })
+                )
+                .addButton((b) =>
+                    b
+                        .setIcon('trash')
+                        .setTooltip('删除此课程')
+                        .setWarning()
+                        .onClick(async () => {
+                            this.plugin.settings.courses.splice(idx, 1);
+                            if (this.plugin.settings.selectedCourseId === course.id) {
+                                this.plugin.settings.selectedCourseId = '';
+                            }
+                            await this.plugin.saveSettings();
+                            this.display();
+                        })
+                );
+        });
+
+        new Setting(containerEl)
+            .addButton((b) =>
+                b
+                    .setButtonText('+ 新增课程')
+                    .setCta()
+                    .onClick(async () => {
+                        if (!this.plugin.settings.courses) this.plugin.settings.courses = [];
+                        this.plugin.settings.courses.push({
+                            id: Date.now().toString(),
+                            name: '',
+                            folder: '',
+                        });
+                        await this.plugin.saveSettings();
+                        this.display();
+                    })
+            );
+
         new Setting(containerEl).setName('工作台快速添加栏配置').setHeading();
         new Setting(containerEl)
             .setName('启用顶部/底部快速添加输入框')
@@ -597,6 +676,30 @@ export class WorkPageSettingTab extends PluginSettingTab {
         new Setting(containerEl).setName('全局环境与模板行为').setHeading();
         new Setting(containerEl).setName('软件启动时默认打开 WorkPage').addToggle((t) => t.setValue(this.plugin.settings.openOnStartup).onChange(async (v) => { this.plugin.settings.openOnStartup = v; await this.plugin.saveSettings(); }));
         new Setting(containerEl).setName('没有活跃标签页时强制回归 WorkPage').addToggle((t) => t.setValue(this.plugin.settings.openWhenEmpty).onChange(async (v) => { this.plugin.settings.openWhenEmpty = v; await this.plugin.saveSettings(); }));
+
+        new Setting(containerEl).setName('📅 任务截止时间管理').setHeading();
+        new Setting(containerEl)
+            .setName('在待办列表中显示未逾期任务')
+            .setDesc('仅展示截止时间未到或已到期但未标记完成的任务。关闭后将显示所有未完成任务。')
+            .addToggle((t) => 
+                t.setValue(this.plugin.settings.showOverdueTasks ?? true)
+                    .onChange(async (v) => { 
+                        this.plugin.settings.showOverdueTasks = v; 
+                        await this.plugin.saveSettings(); 
+                    })
+            );
+
+        new Setting(containerEl)
+            .setName('截止时间标记格式')
+            .setDesc('任务行末的截止时间标记。例如：[due:: 2025-03-20]。只需修改日期部分格式。')
+            .addText((t) =>
+                t.setValue(this.plugin.settings.taskDueDateFormat || '[due:: YYYY-MM-DD]')
+                    .setPlaceholder('[due:: YYYY-MM-DD]')
+                    .onChange(async (v) => {
+                        this.plugin.settings.taskDueDateFormat = v;
+                        await this.plugin.saveSettings();
+                    })
+            );
 
         new Setting(containerEl)
             .setName('配置布局导出与备份')

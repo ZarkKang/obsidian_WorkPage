@@ -702,6 +702,103 @@ If your plugin does not need CSS, delete this file.
     outline: none;
 }
 
+/* 任务截止时间选择器 */
+.quick-add-due-date {
+    flex-shrink: 0;
+    background-color: var(--background-modifier-form-field);
+    border: 1px solid var(--background-modifier-border);
+    color: var(--text-muted);
+    border-radius: var(--input-radius, 6px);
+    padding: 6px 10px;
+    font-family: inherit;
+    font-size: var(--font-ui-small);
+    cursor: pointer;
+}
+
+.quick-add-due-date:focus {
+    border-color: var(--interactive-accent);
+    outline: none;
+}
+
+.quick-add-due-date::placeholder {
+    color: var(--text-faint);
+}
+
+/* 任务列表项内容布局 */
+.workpage-task-content {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    overflow: hidden;
+}
+
+/* 任务截止日期徽章 */
+.task-due-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+    font-weight: 500;
+}
+
+/* 正常截止时间 */
+.task-due-normal {
+    background-color: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+/* 紧急截止时间 (3天内) */
+.task-due-urgent {
+    background-color: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    animation: pulse-urgent 2s ease-in-out infinite;
+}
+
+/* 今日截止 */
+.task-due-today {
+    background-color: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    font-weight: 600;
+    animation: pulse-urgent 1s ease-in-out infinite;
+}
+
+/* 已逾期 */
+.task-due-overdue {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: #dc2626;
+    border: 1px solid rgba(220, 38, 38, 0.5);
+    font-weight: 600;
+    text-decoration: line-through;
+}
+
+/* 脉冲动画 */
+@keyframes pulse-urgent {
+    0%, 100% { 
+        opacity: 1;
+    }
+    50% { 
+        opacity: 0.7;
+    }
+}
+
+/* 已完成任务样式 */
+.workpage-task-done {
+    text-decoration: line-through;
+    color: var(--text-muted);
+    opacity: 0.6;
+}
+
+.workpage-task-done .task-due-badge {
+    opacity: 0.4;
+    animation: none;
+}
+
 /* ==========================================================================
    全新美化今日看板 - Modern Dashboard 样式
    ========================================================================== */
