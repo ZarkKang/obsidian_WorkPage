@@ -347,17 +347,41 @@ tags: [核心概念, ${activeCourse.name}]
 
     private async renderTasks(content: HTMLElement): Promise<void> {
         const loading = content.createEl('p', { text: '加载中...' });
+        
+        // 获取所有任务（包括未来的和逾期的）用于汇总
+        const allTasks = await this.getAllTasks();
+        
+        // 分类任务
+        const overdueTasks = allTasks.filter(t => {
+            if (!t.dueDate) return false;
+            const dueDate = window.moment(t.dueDate, 'YYYY-MM-DD');
+            const now = window.moment();
+            return now.isAfter(dueDate, 'day');
+        });
+
         this.getTodayTasks()
             .then((tasks) => {
                 loading.remove();
+                
+                // 显示逾期任务汇总
+                if (overdueTasks.length > 0) {
+                    this.renderOverdueTasksSummary(content, overdueTasks);
+                }
+
                 if (tasks.length === 0) {
                     const dailyPlugin = this.app.internalPlugins.getEnabledPluginById('daily-notes');
                     if (!dailyPlugin) {
                         content.createEl('p', { text: '请先启用核心插件"日记"', cls: 'no-data' });
                     } else {
-                        content.createEl('p', { text: '今天的日记暂无未完成的任务 ✨', cls: 'no-data' });
+                        content.createEl('p', { text: '暂无未完成且未过期的任务 ✨', cls: 'no-data' });
                     }
                 } else {
+                    // 如果有逾期任务，添加分隔线
+                    if (overdueTasks.length > 0) {
+                        content.createEl('hr', { cls: 'task-section-divider' });
+                        content.createEl('h4', { text: '📋 待办任务', cls: 'task-section-title' });
+                    }
+
                     const ul = content.createEl('ul');
                     ul.style.cssText = 'list-style:none; padding:0; margin:0;';
                     tasks.forEach((task) => {
@@ -384,9 +408,10 @@ tags: [核心概念, ${activeCourse.name}]
                             .trim();
                         
                         const itemContent = li.createDiv({ cls: 'workpage-task-content' });
-                        itemContent.style.cssText = 'flex: 1; display: flex; align-items: center; gap: 8px;';
+                        itemContent.style.cssText = 'flex: 1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;';
                         
                         const nameSpan = itemContent.createSpan({ text: displayText, cls: 'item-name workpage-task-text' });
+                        nameSpan.style.cssText = 'flex: 1; min-width: 0;';
                         nameSpan.addEventListener('click', () => {
                             const leaf = this.app.workspace.getLeaf(false);
                             void leaf.openFile(task.file).then(() => {
@@ -394,6 +419,22 @@ tags: [核心概念, ${activeCourse.name}]
                                 if (editor) editor.setCursor({ line: task.line, ch: 0 });
                             });
                         });
+
+                        // 显示任务来源日期（如果不是今天）
+                        const dailyPlugin = this.app.internalPlugins.getEnabledPluginById('daily-notes');
+                        if (dailyPlugin) {
+                            const { format } = dailyPlugin.options;
+                            const fileName = task.file.basename;
+                            const m = window.moment(fileName, format || 'YYYY-MM-DD', true);
+                            if (m.isValid()) {
+                                const today = window.moment();
+                                if (!m.isSame(today, 'day')) {
+                                    const sourceBadge = itemContent.createSpan({ cls: 'task-source-badge' });
+                                    sourceBadge.setText(`📝 ${m.format('MM-DD')}`);
+                                    sourceBadge.style.cssText = 'font-size: 0.7rem; color: var(--text-muted); padding: 2px 6px; border-radius: 4px; background: var(--background-modifier-hover); white-space: nowrap; flex-shrink: 0;';
+                                }
+                            }
+                        }
 
                         // 显示截止时间标签
                         if (task.dueDate) {
@@ -430,6 +471,141 @@ tags: [核心概念, ${activeCourse.name}]
                 loading.remove();
                 content.createEl('p', { text: '加载失败', cls: 'no-data' });
             });
+    }
+
+    // 渲染逾期任务汇总
+    private renderOverdueTasksSummary(content: HTMLElement, overdueTasks: Array<any>): void {
+        // 按逾期天数分组
+        const groupedByDays = new Map<number, any[]>();
+        
+        overdueTasks.forEach((task) => {
+            const dueDate = window.moment(task.dueDate, 'YYYY-MM-DD');
+            const now = window.moment();
+            const daysOverdue = now.diff(dueDate, 'days');
+            
+            if (!groupedByDays.has(daysOverdue)) {
+                groupedByDays.set(daysOverdue, []);
+            }
+            groupedByDays.get(daysOverdue)!.push(task);
+        });
+
+        // 排序（逾期最久的在前）
+        const sortedDays = Array.from(groupedByDays.keys()).sort((a, b) => b - a);
+
+        // 创建逾期汇总容器
+        const summaryContainer = content.createDiv({ cls: 'overdue-tasks-summary' });
+        summaryContainer.style.cssText = `
+            background: rgba(220, 38, 38, 0.08);
+            border: 1.5px solid #dc2626;
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-bottom: 16px;
+        `;
+
+        // 标题
+        const titleRow = summaryContainer.createDiv({ cls: 'overdue-summary-title' });
+        titleRow.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 10px;';
+        
+        const titleIcon = titleRow.createSpan();
+        titleIcon.style.cssText = 'font-size: 1.2em;';
+        titleIcon.setText('⚠️');
+        
+        const titleText = titleRow.createSpan({ cls: 'overdue-summary-text' });
+        titleText.style.cssText = 'font-weight: 600; color: #dc2626; font-size: 0.95em;';
+        titleText.setText(`逾期任务汇总 (${overdueTasks.length})`);
+
+        // 逾期任务列表
+        sortedDays.forEach((daysOverdue) => {
+            const tasksForDay = groupedByDays.get(daysOverdue)!;
+            
+            // 日期分组标题
+            const dayTitle = summaryContainer.createDiv({ cls: 'overdue-day-group' });
+            dayTitle.style.cssText = `
+                font-size: 0.85em;
+                color: #ef4444;
+                font-weight: 500;
+                margin-top: 8px;
+                margin-bottom: 6px;
+                padding-left: 4px;
+                border-left: 3px solid #ef4444;
+            `;
+            dayTitle.setText(`逾期 ${daysOverdue} 天`);
+
+            // 这一组的任务
+            tasksForDay.forEach((task) => {
+                const taskItem = summaryContainer.createDiv({ cls: 'overdue-task-item' });
+                taskItem.style.cssText = `
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 6px 8px;
+                    border-radius: 6px;
+                    font-size: 0.9em;
+                    cursor: pointer;
+                    transition: background 0.2s;
+                    margin-left: 8px;
+                    margin-bottom: 4px;
+                `;
+
+                taskItem.addEventListener('mouseenter', () => {
+                    taskItem.style.background = 'rgba(220, 38, 38, 0.1)';
+                });
+
+                taskItem.addEventListener('mouseleave', () => {
+                    taskItem.style.background = 'transparent';
+                });
+
+                // 任务内容
+                const displayText = task.text
+                    .replace(/^\s*-\s*\[[ xX]?\]\s*/, '')
+                    .replace(/\s*\[due::\s*\d{4}-\d{2}-\d{2}\]\s*$/, '')
+                    .trim();
+
+                const taskContent = taskItem.createSpan({ text: displayText, cls: 'overdue-task-content' });
+                taskContent.style.cssText = 'flex: 1; min-width: 0; color: #dc2626;';
+
+                // 截止日期
+                const dueDateBadge = taskItem.createSpan({ cls: 'overdue-task-date' });
+                dueDateBadge.style.cssText = `
+                    font-size: 0.75em;
+                    color: #b91c1c;
+                    background: rgba(220, 38, 38, 0.15);
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    white-space: nowrap;
+                    flex-shrink: 0;
+                `;
+                dueDateBadge.setText(task.dueDate);
+
+                // 点击跳转到任务
+                taskItem.addEventListener('click', () => {
+                    const leaf = this.app.workspace.getLeaf(false);
+                    void leaf.openFile(task.file).then(() => {
+                        const editor = this.app.workspace.activeEditor?.editor;
+                        if (editor) editor.setCursor({ line: task.line, ch: 0 });
+                    });
+                });
+            });
+        });
+
+        // 统计信息
+        const statsRow = summaryContainer.createDiv({ cls: 'overdue-summary-stats' });
+        statsRow.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(220, 38, 38, 0.2);
+            font-size: 0.85em;
+            color: #991b1b;
+        `;
+
+        const totalText = statsRow.createSpan();
+        totalText.setText(`总计 ${overdueTasks.length} 个逾期任务`);
+
+        const maxOverdue = Math.max(...sortedDays);
+        const maxOverdueText = statsRow.createSpan();
+        maxOverdueText.setText(`最久逾期 ${maxOverdue} 天`);
     }
 
     private renderRecentFiles(content: HTMLElement, section: WorkPageSection): void {
@@ -1070,52 +1246,187 @@ tags: [核心概念, ${activeCourse.name}]
         await this.app.vault.modify(file, lines.join('\n'));
     }
 
+    // 获取所有任务（包括逾期的）
+    async getAllTasks(): Promise<{ file: TFile; line: number; text: string; dueDate?: string; isOverdue?: boolean }[]> {
+        const tasks: { file: TFile; line: number; text: string; dueDate?: string; isOverdue?: boolean }[] = [];
+        const dailyPlugin = this.app.internalPlugins.getEnabledPluginById('daily-notes');
+        if (!dailyPlugin) return tasks;
+
+        const { folder, format } = dailyPlugin.options;
+        const dueDateRegex = /\[due::\s*(\d{4}-\d{2}-\d{2})\]/;
+        const now = window.moment();
+        const dailyFolder = folder || '';
+
+        // 获取所有 Markdown 文件
+        const allFiles = this.app.vault.getMarkdownFiles();
+
+        // 遍历所有文件
+        for (const file of allFiles) {
+            let isDailyNote = false;
+            let dateStr: string | null = null;
+
+            if (dailyFolder) {
+                if (!file.path.startsWith(dailyFolder + '/')) continue;
+                const relativePath = file.path.slice(dailyFolder.length + 1).replace(/\.md$/, '');
+                const m = window.moment(relativePath, format || 'YYYY-MM-DD', true);
+                if (m.isValid()) {
+                    isDailyNote = true;
+                    dateStr = m.format('YYYY-MM-DD');
+                }
+            } else {
+                const basename = file.basename;
+                const m = window.moment(basename, format || 'YYYY-MM-DD', true);
+                if (m.isValid()) {
+                    isDailyNote = true;
+                    dateStr = m.format('YYYY-MM-DD');
+                }
+            }
+
+            if (!isDailyNote || !dateStr) continue;
+
+            try {
+                const content = await this.app.vault.read(file);
+                const lines = content.split('\n');
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    if (line && /^\s*-\s*\[ \]/.test(line)) {
+                        const dueDateMatch = line.match(dueDateRegex);
+                        const dueDate = dueDateMatch ? dueDateMatch[1] : undefined;
+
+                        let isOverdue = false;
+                        if (dueDate) {
+                            const dueDateTime = window.moment(dueDate, 'YYYY-MM-DD');
+                            isOverdue = now.isAfter(dueDateTime, 'day');
+                        }
+
+                        tasks.push({
+                            file,
+                            line: i,
+                            text: line.trim(),
+                            dueDate,
+                            isOverdue
+                        });
+                    }
+                }
+            } catch (e) {
+                console.error(`Error reading file ${file.path}:`, e);
+                continue;
+            }
+        }
+
+        return tasks;
+    }
+
     async getTodayTasks(): Promise<{ file: TFile; line: number; text: string; dueDate?: string; isOverdue?: boolean }[]> {
         const tasks: { file: TFile; line: number; text: string; dueDate?: string; isOverdue?: boolean }[] = [];
         const dailyPlugin = this.app.internalPlugins.getEnabledPluginById('daily-notes');
         if (!dailyPlugin) return tasks;
 
         const { folder, format } = dailyPlugin.options;
-        const today = window.moment().format(format || 'YYYY-MM-DD');
-        const filePath = `${folder ? `${folder}/` : ''}${today}.md`;
-
-        const file = this.app.vault.getAbstractFileByPath(filePath);
-        if (!(file instanceof TFile)) return tasks;
-
-        const content = await this.app.vault.read(file);
-        const lines = content.split('\n');
-        const dueFormat = this.plugin.settings.taskDueDateFormat || '[due:: YYYY-MM-DD]';
         const dueDateRegex = /\[due::\s*(\d{4}-\d{2}-\d{2})\]/;
-        
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            if (line && /^\s*-\s*\[ \]/.test(line)) {
-                // 提取截止日期
-                const dueDateMatch = line.match(dueDateRegex);
-                const dueDate = dueDateMatch ? dueDateMatch[1] : undefined;
+        const now = window.moment();
+        const today = now.format('YYYY-MM-DD');
+
+        // 获取所有 Markdown 文件
+        const allFiles = this.app.vault.getMarkdownFiles();
+        const dailyFolder = folder || '';
+
+        // 遍历所有文件，查找所有日记文件中的任务
+        for (const file of allFiles) {
+            // 判断是否是日记文件
+            let isDailyNote = false;
+            let dateStr: string | null = null;
+
+            if (dailyFolder) {
+                // 如果指定了日记文件夹，检查文件是否在该文件夹内
+                if (!file.path.startsWith(dailyFolder + '/')) continue;
                 
-                // 判断是否过期
-                let isOverdue = false;
-                if (dueDate) {
-                    const due = window.moment(dueDate, 'YYYY-MM-DD');
-                    const now = window.moment();
-                    isOverdue = now.isAfter(due, 'day');
+                const relativePath = file.path.slice(dailyFolder.length + 1).replace(/\.md$/, '');
+                // 尝试解析日期
+                const m = window.moment(relativePath, format || 'YYYY-MM-DD', true);
+                if (m.isValid()) {
+                    isDailyNote = true;
+                    dateStr = m.format('YYYY-MM-DD');
                 }
-                
-                // 如果启用了逾期过滤，跳过已过期的任务
-                if (this.plugin.settings.showOverdueTasks !== false && isOverdue) {
-                    continue;
+            } else {
+                // 如果未指定文件夹，尝试从文件名解析日期
+                const basename = file.basename;
+                const m = window.moment(basename, format || 'YYYY-MM-DD', true);
+                if (m.isValid()) {
+                    isDailyNote = true;
+                    dateStr = m.format('YYYY-MM-DD');
                 }
-                
-                tasks.push({ 
-                    file, 
-                    line: i, 
-                    text: line.trim(),
-                    dueDate,
-                    isOverdue 
-                });
+            }
+
+            if (!isDailyNote || !dateStr) continue;
+
+            // 读取文件内容
+            try {
+                const content = await this.app.vault.read(file);
+                const lines = content.split('\n');
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    if (line && /^\s*-\s*\[ \]/.test(line)) {
+                        // 提取截止日期
+                        const dueDateMatch = line.match(dueDateRegex);
+                        const dueDate = dueDateMatch ? dueDateMatch[1] : undefined;
+
+                        let isOverdue = false;
+                        let shouldShow = false;
+
+                        if (dueDate) {
+                            // 有截止日期的任务：显示未逾期的任务
+                            const dueDateTime = window.moment(dueDate, 'YYYY-MM-DD');
+                            isOverdue = now.isAfter(dueDateTime, 'day');
+
+                            // 如果启用了逾期过滤，跳过已过期的任务
+                            if (this.plugin.settings.showOverdueTasks !== false && isOverdue) {
+                                continue;
+                            }
+
+                            // 只显示截止日期 >= 今天的任务
+                            shouldShow = dueDateTime.isSameOrAfter(now, 'day');
+                        } else {
+                            // 无截止日期的任务：仅当天日记显示
+                            shouldShow = (dateStr === today);
+                        }
+
+                        if (shouldShow) {
+                            tasks.push({
+                                file,
+                                line: i,
+                                text: line.trim(),
+                                dueDate,
+                                isOverdue
+                            });
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error(`Error reading file ${file.path}:`, e);
+                continue;
             }
         }
+
+        // 按截止日期排序（有截止日期的靠前，按日期从近到远排列）
+        tasks.sort((a, b) => {
+            const aDue = a.dueDate ? window.moment(a.dueDate, 'YYYY-MM-DD') : null;
+            const bDue = b.dueDate ? window.moment(b.dueDate, 'YYYY-MM-DD') : null;
+
+            // 都有截止日期，按日期排序
+            if (aDue && bDue) {
+                return aDue.diff(bDue);
+            }
+            // 只有 a 有截止日期，a 靠前
+            if (aDue) return -1;
+            // 只有 b 有截止日期，b 靠前
+            if (bDue) return 1;
+            // 都没有截止日期，保持原顺序
+            return 0;
+        });
+
         return tasks;
     }
 }
