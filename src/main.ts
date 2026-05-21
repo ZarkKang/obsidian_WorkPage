@@ -1459,7 +1459,7 @@ export default class MyPlugin extends Plugin {
         if (!this.settings.currentMode) this.settings.currentMode = 'normal';
         if (this.settings.selectedCourseId === undefined) this.settings.selectedCourseId = '';
         // 确保逾期显示开关有默认值（默认隐藏逾期任务，需用户手动开启）
-        if (this.settings.showOverdueTasks === undefined) this.settings.showOverdueTasks = false;
+        if (this.settings.showOverdueTasks === undefined) this.settings.showOverdueTasks = true;
     }
 
     async saveSettings(): Promise<void> {
