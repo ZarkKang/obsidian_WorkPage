@@ -104,7 +104,7 @@ class WorkPageView extends ItemView {
             this.renderClassModePanel(container);
         }
 
-        // 4. 快速添加栏栏位
+        // 4. 快速添加栏位
         const qa = this.plugin.settings.quickAdd ?? DEFAULT_QUICK_ADD;
         if (qa.enabled && qa.position === 'top') {
             this.renderQuickAdd(container);
@@ -348,10 +348,7 @@ tags: [核心概念, ${activeCourse.name}]
     private async renderTasks(content: HTMLElement): Promise<void> {
         const loading = content.createEl('p', { text: '加载中...' });
         
-        // 获取所有任务（包括未来的和逾期的）用于汇总
         const allTasks = await this.getAllTasks();
-        
-        // 分类任务
         const overdueTasks = allTasks.filter(t => {
             if (!t.dueDate) return false;
             const dueDate = window.moment(t.dueDate, 'YYYY-MM-DD');
@@ -363,8 +360,8 @@ tags: [核心概念, ${activeCourse.name}]
             .then((tasks) => {
                 loading.remove();
                 
-                // 显示逾期任务汇总
-                if (overdueTasks.length > 0) {
+                // 显示逾期任务汇总（受设置控制）
+                if (this.plugin.settings.showOverdueTasks && overdueTasks.length > 0) {
                     this.renderOverdueTasksSummary(content, overdueTasks);
                 }
 
@@ -376,7 +373,6 @@ tags: [核心概念, ${activeCourse.name}]
                         content.createEl('p', { text: '暂无未完成且未过期的任务 ✨', cls: 'no-data' });
                     }
                 } else {
-                    // 如果有逾期任务，添加分隔线
                     if (overdueTasks.length > 0) {
                         content.createEl('hr', { cls: 'task-section-divider' });
                         content.createEl('h4', { text: '📋 待办任务', cls: 'task-section-title' });
@@ -401,7 +397,6 @@ tags: [核心概念, ${activeCourse.name}]
                             }
                         });
 
-                        // 移除截止时间标记后显示任务文本
                         const displayText = task.text
                             .replace(/^\s*-\s*\[[ xX]?\]\s*/, '')
                             .replace(/\s*\[due::\s*\d{4}-\d{2}-\d{2}\]\s*$/, '')
@@ -420,7 +415,6 @@ tags: [核心概念, ${activeCourse.name}]
                             });
                         });
 
-                        // 显示任务来源日期（如果不是今天）
                         const dailyPlugin = this.app.internalPlugins.getEnabledPluginById('daily-notes');
                         if (dailyPlugin) {
                             const { format } = dailyPlugin.options;
@@ -436,7 +430,6 @@ tags: [核心概念, ${activeCourse.name}]
                             }
                         }
 
-                        // 显示截止时间标签
                         if (task.dueDate) {
                             const dueBadge = itemContent.createSpan({ cls: 'task-due-badge' });
                             const dueDate = window.moment(task.dueDate, 'YYYY-MM-DD');
@@ -473,9 +466,7 @@ tags: [核心概念, ${activeCourse.name}]
             });
     }
 
-    // 渲染逾期任务汇总
     private renderOverdueTasksSummary(content: HTMLElement, overdueTasks: Array<any>): void {
-        // 按逾期天数分组
         const groupedByDays = new Map<number, any[]>();
         
         overdueTasks.forEach((task) => {
@@ -489,10 +480,8 @@ tags: [核心概念, ${activeCourse.name}]
             groupedByDays.get(daysOverdue)!.push(task);
         });
 
-        // 排序（逾期最久的在前）
         const sortedDays = Array.from(groupedByDays.keys()).sort((a, b) => b - a);
 
-        // 创建逾期汇总容器
         const summaryContainer = content.createDiv({ cls: 'overdue-tasks-summary' });
         summaryContainer.style.cssText = `
             background: rgba(220, 38, 38, 0.08);
@@ -502,7 +491,6 @@ tags: [核心概念, ${activeCourse.name}]
             margin-bottom: 16px;
         `;
 
-        // 标题
         const titleRow = summaryContainer.createDiv({ cls: 'overdue-summary-title' });
         titleRow.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 10px;';
         
@@ -514,11 +502,9 @@ tags: [核心概念, ${activeCourse.name}]
         titleText.style.cssText = 'font-weight: 600; color: #dc2626; font-size: 0.95em;';
         titleText.setText(`逾期任务汇总 (${overdueTasks.length})`);
 
-        // 逾期任务列表
         sortedDays.forEach((daysOverdue) => {
             const tasksForDay = groupedByDays.get(daysOverdue)!;
             
-            // 日期分组标题
             const dayTitle = summaryContainer.createDiv({ cls: 'overdue-day-group' });
             dayTitle.style.cssText = `
                 font-size: 0.85em;
@@ -531,7 +517,6 @@ tags: [核心概念, ${activeCourse.name}]
             `;
             dayTitle.setText(`逾期 ${daysOverdue} 天`);
 
-            // 这一组的任务
             tasksForDay.forEach((task) => {
                 const taskItem = summaryContainer.createDiv({ cls: 'overdue-task-item' });
                 taskItem.style.cssText = `
@@ -555,7 +540,6 @@ tags: [核心概念, ${activeCourse.name}]
                     taskItem.style.background = 'transparent';
                 });
 
-                // 任务内容
                 const displayText = task.text
                     .replace(/^\s*-\s*\[[ xX]?\]\s*/, '')
                     .replace(/\s*\[due::\s*\d{4}-\d{2}-\d{2}\]\s*$/, '')
@@ -564,7 +548,6 @@ tags: [核心概念, ${activeCourse.name}]
                 const taskContent = taskItem.createSpan({ text: displayText, cls: 'overdue-task-content' });
                 taskContent.style.cssText = 'flex: 1; min-width: 0; color: #dc2626;';
 
-                // 截止日期
                 const dueDateBadge = taskItem.createSpan({ cls: 'overdue-task-date' });
                 dueDateBadge.style.cssText = `
                     font-size: 0.75em;
@@ -577,7 +560,6 @@ tags: [核心概念, ${activeCourse.name}]
                 `;
                 dueDateBadge.setText(task.dueDate);
 
-                // 点击跳转到任务
                 taskItem.addEventListener('click', () => {
                     const leaf = this.app.workspace.getLeaf(false);
                     void leaf.openFile(task.file).then(() => {
@@ -588,7 +570,6 @@ tags: [核心概念, ${activeCourse.name}]
             });
         });
 
-        // 统计信息
         const statsRow = summaryContainer.createDiv({ cls: 'overdue-summary-stats' });
         statsRow.style.cssText = `
             display: flex;
@@ -783,17 +764,26 @@ tags: [核心概念, ${activeCourse.name}]
             for (const file of allFiles) {
                 let dateMatch: any = null;
                 const fileName = file.basename;
-                const relativePath = folder ? file.path.replace(`${folder}/`, '') : file.path;
+                let relativePath = '';
 
-                let m = window.moment(relativePath.replace(/\.md$/, ''), format, true);
-                if (m.isValid()) {
-                    dateMatch = m;
+                if (folder) {
+                    if (!file.path.startsWith(folder + '/')) continue;
+                    relativePath = file.path.slice(folder.length + 1).replace(/\.md$/, '');
                 } else {
+                    relativePath = fileName;
+                }
+
+                let m = window.moment(relativePath, format, true);
+                if (!m.isValid()) {
                     const commonFormats = ['YYYY-MM-DD', 'YYYYMMDD', 'YYYY/MM/DD', 'DD-MM-YYYY', 'MM-DD-YYYY'];
                     for (const fmt of commonFormats) {
-                        m = window.moment(fileName, fmt, true);
-                        if (m.isValid()) { dateMatch = m; break; }
+                        m = window.moment(relativePath, fmt, true);
+                        if (m.isValid()) break;
                     }
+                }
+
+                if (m.isValid()) {
+                    dateMatch = m;
                 }
 
                 if (dateMatch && dateMatch.isValid()) {
@@ -930,13 +920,49 @@ tags: [核心概念, ${activeCourse.name}]
 
                 if (hasDaily) {
                     dayEl.addClass('calendar-day--clickable');
-                    dayEl.addEventListener('click', async (e) => {
-                        e.stopPropagation();
-                        const fPath = `${folder ? `${folder}/` : ''}${day.date.format(format)}.md`;
-                        const file = this.app.vault.getAbstractFileByPath(fPath);
-                        if (file instanceof TFile) await this.app.workspace.getLeaf(false).openFile(file);
-                    });
+                } else {
+                    // 没有日记文件也允许点击创建
+                    dayEl.addClass('calendar-day--clickable');
                 }
+
+                dayEl.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const dateStr = day.date.format(format);          // 按格式生成文件名
+                    const fPath = `${folder ? `${folder}/` : ''}${dateStr}.md`;
+
+                    let file = this.app.vault.getAbstractFileByPath(fPath);
+                    if (!(file instanceof TFile)) {
+                        // ----- 文件不存在 → 创建日记 -----
+                        let content = `# ${dateStr}\n\n`;
+                        
+                        // 如果配置了模板，优先使用模板内容
+                        const templatePath = config.templatePath;
+                        if (templatePath) {
+                            const templateFile = this.app.vault.getAbstractFileByPath(templatePath);
+                            if (templateFile instanceof TFile) {
+                                try {
+                                    const tpl = await this.app.vault.read(templateFile);
+                                    content = tpl.replace(/\{\{date\}\}/g, dateStr);
+                                } catch (e) {
+                                    console.warn('读取日记模板失败，使用默认空模板', e);
+                                }
+                            }
+                        }
+
+                        // 确保父文件夹存在
+                        const dirPath = fPath.substring(0, fPath.lastIndexOf('/'));
+                        if (dirPath) await this.safeEnsureFolder(dirPath);
+
+                        // 创建文件
+                        file = await this.app.vault.create(fPath, content);
+                        new Notice(`📅 已创建日记：${dateStr}`);
+                    }
+
+                    // 打开文件
+                    if (file instanceof TFile) {
+                        await this.app.workspace.getLeaf(false).openFile(file);
+                    }
+                });
             }
         }
     }
@@ -986,160 +1012,143 @@ tags: [核心概念, ${activeCourse.name}]
     }
 
     private renderTagCloud(content: HTMLElement, section: WorkPageSection): void {
-            const allTags = this.app.metadataCache.getTags();
-            if (!allTags || Object.keys(allTags).length === 0) {
-                content.empty();
-                content.createEl('p', { text: '仓库中暂无标签', cls: 'no-data' });
-                return;
-            }
-
-            // 读取新、旧策略配置，确保无缝平滑迁移
-            const cfg = section.tagCloudConfig || {
-                tagMaxCount: section.tagMaxCount || 30,
-                minTagCount: 1,
-                sortBy: 'frequency',
-                showCount: true,
-                colorMode: 'colorful',
-                excludeTags: ''
-            };
-
-            const maxTags = cfg.tagMaxCount ?? 30;
-            const minCountCutoff = cfg.minTagCount ?? 1;
-            const sortBy = cfg.sortBy ?? 'frequency';
-            const showCount = cfg.showCount ?? true;
-            const colorMode = cfg.colorMode ?? 'colorful';
-            const excludeStr = cfg.excludeTags ?? '';
-
-            // 1. 根据规则过滤标签（排除词与低频剔除）
-            const excludes = excludeStr.split(',').map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
-            let entries = Object.entries(allTags);
-
-            if (excludes.length > 0) {
-                entries = entries.filter(([tag]) => {
-                    const cleanTag = tag.replace(/^#/, '').toLowerCase();
-                    const rawTag = tag.toLowerCase();
-                    return !excludes.some(ex => cleanTag === ex || rawTag === ex || cleanTag.includes(ex));
-                });
-            }
-
-            if (minCountCutoff > 1) {
-                entries = entries.filter(([_, count]) => count >= minCountCutoff);
-            }
-
-            if (entries.length === 0) {
-                content.empty();
-                content.createEl('p', { text: '没有匹配的过滤标签', cls: 'no-data' });
-                return;
-            }
-
-            // 2. 核心权重裁剪：始终先选出引用最高频的前 N 个标签
-            entries.sort((a, b) => b[1] - a[1]);
-            entries = entries.slice(0, maxTags);
-
-            // 计算当前集合的上下极值，用于权重无缝比例换算
-            const counts = entries.map(([_, c]) => c);
-            const maxC = Math.max(...counts);
-            const minC = Math.min(...counts);
-
-            // 3. 按照用户偏好，重组排列云顺序
-            if (sortBy === 'alphabetical') {
-                entries.sort((a, b) => a[0].localeCompare(b[0]));
-            } else if (sortBy === 'random') {
-                entries.sort(() => Math.random() - 0.5);
-            }
-
-            // 4. 清空并开始渲染精美的网格云视图
+        const allTags = this.app.metadataCache.getTags();
+        if (!allTags || Object.keys(allTags).length === 0) {
             content.empty();
-            const cloudWrap = content.createDiv({ cls: 'tag-cloud-wrap' });
-            cloudWrap.style.cssText = 'display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; padding: 12px; line-height: 1.6;';
+            content.createEl('p', { text: '仓库中暂无标签', cls: 'no-data' });
+            return;
+        }
 
-            // 探测暗黑/明亮环境
-            const isDark = document.body.classList.contains('theme-dark');
+        const cfg = section.tagCloudConfig || {
+            tagMaxCount: section.tagMaxCount || 30,
+            minTagCount: 1,
+            sortBy: 'frequency',
+            showCount: true,
+            colorMode: 'colorful',
+            excludeTags: ''
+        };
 
-            entries.forEach(([tag, count]) => {
-                // 计算权重比（0 ~ 1）
-                const weight = maxC === minC ? 0.5 : (count - minC) / (maxC - minC);
-                // 字体映射范围：从 0.85rem(基础小字) 线性映射到 1.6rem(超级大词)
-                const fontSize = 0.85 + weight * 0.75;
+        const maxTags = cfg.tagMaxCount ?? 30;
+        const minCountCutoff = cfg.minTagCount ?? 1;
+        const sortBy = cfg.sortBy ?? 'frequency';
+        const showCount = cfg.showCount ?? true;
+        const colorMode = cfg.colorMode ?? 'colorful';
+        const excludeStr = cfg.excludeTags ?? '';
 
-                const displayText = showCount ? `${tag} (${count})` : tag;
-                const tagEl = cloudWrap.createSpan({ cls: 'tag-cloud-item', text: displayText });
-                
-                // 基础框架物理结构样式
-                tagEl.style.fontSize = `${fontSize}rem`;
-                tagEl.style.display = 'inline-block';
-                tagEl.style.padding = '3px 8px';
-                tagEl.style.borderRadius = '6px';
-                tagEl.style.cursor = 'pointer';
-                tagEl.style.userSelect = 'none';
-                tagEl.style.transition = 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)';
+        const excludes = excludeStr.split(',').map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
+        let entries = Object.entries(allTags);
 
-                // 计算色彩学 HSL 唯一色相
-                const hash = [...tag].reduce((acc, char) => acc + char.charCodeAt(0), 0);
-                const hue = hash % 360;
-                const lightness = isDark ? 68 : 42; // 明暗环境对比度友好亮度
-
-                // 5. 应用色彩视觉模式
-                if (colorMode === 'accent') {
-                    // 主题高亮渐变：完美贴合 Obsidian 强调色，配合不透明度虚实呼应
-                    tagEl.style.color = 'var(--text-accent)';
-                    tagEl.style.backgroundColor = 'var(--background-secondary)';
-                    tagEl.style.border = '1px solid var(--text-accent)';
-                    tagEl.style.opacity = `${0.55 + weight * 0.45}`;
-                } else if (colorMode === 'colorful') {
-                    // 多彩美学：既具备糖果色的丰富感，同时具有完美的文字阅读对比度
-                    tagEl.style.backgroundColor = `hsla(${hue}, 70%, ${lightness}%, 0.12)`;
-                    tagEl.style.color = `hsl(${hue}, 75%, ${lightness}%)`;
-                    tagEl.style.border = `1px solid hsla(${hue}, 70%, ${lightness}%, 0.15)`;
-                } else {
-                    // 原生纯净模式：干净低调
-                    tagEl.style.color = weight > 0.5 ? 'var(--text-normal)' : 'var(--text-muted)';
-                    tagEl.style.backgroundColor = 'var(--background-secondary)';
-                    tagEl.style.border = '1px solid var(--border-color)';
-                }
-
-                // 6. 精致的悬停交互微动效（Hover Interactions）
-                tagEl.addEventListener('mouseenter', () => {
-                    tagEl.style.transform = 'translateY(-2px) scale(1.04)';
-                    tagEl.style.boxShadow = '0 5px 12px rgba(0, 0, 0, 0.08)';
-                    
-                    if (colorMode === 'accent') {
-                        tagEl.style.backgroundColor = 'var(--text-accent)';
-                        tagEl.style.color = 'var(--background-primary)';
-                        tagEl.style.opacity = '1';
-                    } else if (colorMode === 'colorful') {
-                        tagEl.style.backgroundColor = `hsl(${hue}, 70%, ${isDark ? 62 : 46}%)`;
-                        tagEl.style.color = '#ffffff';
-                    } else {
-                        tagEl.style.backgroundColor = 'var(--background-modifier-hover)';
-                        tagEl.style.color = 'var(--text-normal)';
-                    }
-                });
-
-                tagEl.addEventListener('mouseleave', () => {
-                    tagEl.style.transform = 'none';
-                    tagEl.style.boxShadow = 'none';
-
-                    if (colorMode === 'accent') {
-                        tagEl.style.color = 'var(--text-accent)';
-                        tagEl.style.backgroundColor = 'var(--background-secondary)';
-                        tagEl.style.opacity = `${0.55 + weight * 0.45}`;
-                    } else if (colorMode === 'colorful') {
-                        tagEl.style.backgroundColor = `hsla(${hue}, 70%, ${lightness}%, 0.12)`;
-                        tagEl.style.color = `hsl(${hue}, 75%, ${lightness}%)`;
-                    } else {
-                        tagEl.style.color = weight > 0.5 ? 'var(--text-normal)' : 'var(--text-muted)';
-                        tagEl.style.backgroundColor = 'var(--background-secondary)';
-                    }
-                });
-
-                // 7. 点击绑定内置核心跳转检索
-                tagEl.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    void this.app.workspace.openLinkText(tag, '', false);
-                });
+        if (excludes.length > 0) {
+            entries = entries.filter(([tag]) => {
+                const cleanTag = tag.replace(/^#/, '').toLowerCase();
+                const rawTag = tag.toLowerCase();
+                return !excludes.some(ex => cleanTag === ex || rawTag === ex || cleanTag.includes(ex));
             });
         }
+
+        if (minCountCutoff > 1) {
+            entries = entries.filter(([_, count]) => count >= minCountCutoff);
+        }
+
+        if (entries.length === 0) {
+            content.empty();
+            content.createEl('p', { text: '没有匹配的过滤标签', cls: 'no-data' });
+            return;
+        }
+
+        entries.sort((a, b) => b[1] - a[1]);
+        entries = entries.slice(0, maxTags);
+
+        const counts = entries.map(([_, c]) => c);
+        const maxC = Math.max(...counts);
+        const minC = Math.min(...counts);
+
+        if (sortBy === 'alphabetical') {
+            entries.sort((a, b) => a[0].localeCompare(b[0]));
+        } else if (sortBy === 'random') {
+            entries.sort(() => Math.random() - 0.5);
+        }
+
+        content.empty();
+        const cloudWrap = content.createDiv({ cls: 'tag-cloud-wrap' });
+        cloudWrap.style.cssText = 'display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; padding: 12px; line-height: 1.6;';
+
+        const isDark = document.body.classList.contains('theme-dark');
+
+        entries.forEach(([tag, count]) => {
+            const weight = maxC === minC ? 0.5 : (count - minC) / (maxC - minC);
+            const fontSize = 0.85 + weight * 0.75;
+
+            const displayText = showCount ? `${tag} (${count})` : tag;
+            const tagEl = cloudWrap.createSpan({ cls: 'tag-cloud-item', text: displayText });
+            
+            tagEl.style.fontSize = `${fontSize}rem`;
+            tagEl.style.display = 'inline-block';
+            tagEl.style.padding = '3px 8px';
+            tagEl.style.borderRadius = '6px';
+            tagEl.style.cursor = 'pointer';
+            tagEl.style.userSelect = 'none';
+            tagEl.style.transition = 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)';
+
+            const hash = [...tag].reduce((acc, char) => acc + char.charCodeAt(0), 0);
+            const hue = hash % 360;
+            const lightness = isDark ? 68 : 42;
+
+            if (colorMode === 'accent') {
+                tagEl.style.color = 'var(--text-accent)';
+                tagEl.style.backgroundColor = 'var(--background-secondary)';
+                tagEl.style.border = '1px solid var(--text-accent)';
+                tagEl.style.opacity = `${0.55 + weight * 0.45}`;
+            } else if (colorMode === 'colorful') {
+                tagEl.style.backgroundColor = `hsla(${hue}, 70%, ${lightness}%, 0.12)`;
+                tagEl.style.color = `hsl(${hue}, 75%, ${lightness}%)`;
+                tagEl.style.border = `1px solid hsla(${hue}, 70%, ${lightness}%, 0.15)`;
+            } else {
+                tagEl.style.color = weight > 0.5 ? 'var(--text-normal)' : 'var(--text-muted)';
+                tagEl.style.backgroundColor = 'var(--background-secondary)';
+                tagEl.style.border = '1px solid var(--border-color)';
+            }
+
+            tagEl.addEventListener('mouseenter', () => {
+                tagEl.style.transform = 'translateY(-2px) scale(1.04)';
+                tagEl.style.boxShadow = '0 5px 12px rgba(0, 0, 0, 0.08)';
+                
+                if (colorMode === 'accent') {
+                    tagEl.style.backgroundColor = 'var(--text-accent)';
+                    tagEl.style.color = 'var(--background-primary)';
+                    tagEl.style.opacity = '1';
+                } else if (colorMode === 'colorful') {
+                    tagEl.style.backgroundColor = `hsl(${hue}, 70%, ${isDark ? 62 : 46}%)`;
+                    tagEl.style.color = '#ffffff';
+                } else {
+                    tagEl.style.backgroundColor = 'var(--background-modifier-hover)';
+                    tagEl.style.color = 'var(--text-normal)';
+                }
+            });
+
+            tagEl.addEventListener('mouseleave', () => {
+                tagEl.style.transform = 'none';
+                tagEl.style.boxShadow = 'none';
+
+                if (colorMode === 'accent') {
+                    tagEl.style.color = 'var(--text-accent)';
+                    tagEl.style.backgroundColor = 'var(--background-secondary)';
+                    tagEl.style.opacity = `${0.55 + weight * 0.45}`;
+                } else if (colorMode === 'colorful') {
+                    tagEl.style.backgroundColor = `hsla(${hue}, 70%, ${lightness}%, 0.12)`;
+                    tagEl.style.color = `hsl(${hue}, 75%, ${lightness}%)`;
+                } else {
+                    tagEl.style.color = weight > 0.5 ? 'var(--text-normal)' : 'var(--text-muted)';
+                    tagEl.style.backgroundColor = 'var(--background-secondary)';
+                }
+            });
+
+            tagEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                void this.app.workspace.openLinkText(tag, '', false);
+            });
+        });
+    }
 
     renderQuickAdd(container: HTMLElement): void {
         const qa = this.plugin.settings.quickAdd ?? DEFAULT_QUICK_ADD;
@@ -1173,12 +1182,12 @@ tags: [核心概念, ${activeCourse.name}]
         const add = async () => {
             const text = input.value.trim();
             const selectedDate = dateInput.value;
-            const dueDate = dueDateInput.value; // 可能为空
+            const dueDate = dueDateInput.value;
             if (!text) return;
             
             await this.addTaskToDate(text, selectedDate, dueDate || undefined);
             input.value = '';
-            dueDateInput.value = ''; // 重置截止日期输入
+            dueDateInput.value = '';
             if (qa.showSuccessNotice) {
                 let msg = `✅ 已成功添加待办至日记 (${selectedDate})`;
                 if (dueDate) msg += ` • 截止: ${dueDate}`;
@@ -1225,7 +1234,6 @@ tags: [核心概念, ${activeCourse.name}]
         const cleanText = taskText.replace(/^\s*-\s*\[[ xX]?\]\s*/, '').trim();
         if (!cleanText) return;
 
-        // 构建任务行，包含截止时间
         let taskLine = `- [ ] ${cleanText}`;
         if (dueDate) {
             const dueDateFormatted = window.moment(dueDate).format('YYYY-MM-DD');
@@ -1246,7 +1254,6 @@ tags: [核心概念, ${activeCourse.name}]
         await this.app.vault.modify(file, lines.join('\n'));
     }
 
-    // 获取所有任务（包括逾期的）
     async getAllTasks(): Promise<{ file: TFile; line: number; text: string; dueDate?: string; isOverdue?: boolean }[]> {
         const tasks: { file: TFile; line: number; text: string; dueDate?: string; isOverdue?: boolean }[] = [];
         const dailyPlugin = this.app.internalPlugins.getEnabledPluginById('daily-notes');
@@ -1257,10 +1264,8 @@ tags: [核心概念, ${activeCourse.name}]
         const now = window.moment();
         const dailyFolder = folder || '';
 
-        // 获取所有 Markdown 文件
         const allFiles = this.app.vault.getMarkdownFiles();
 
-        // 遍历所有文件
         for (const file of allFiles) {
             let isDailyNote = false;
             let dateStr: string | null = null;
@@ -1327,30 +1332,24 @@ tags: [核心概念, ${activeCourse.name}]
         const dueDateRegex = /\[due::\s*(\d{4}-\d{2}-\d{2})\]/;
         const now = window.moment();
         const today = now.format('YYYY-MM-DD');
+        const showOverdue = this.plugin.settings.showOverdueTasks ?? false; // 默认不显示逾期
 
-        // 获取所有 Markdown 文件
         const allFiles = this.app.vault.getMarkdownFiles();
         const dailyFolder = folder || '';
 
-        // 遍历所有文件，查找所有日记文件中的任务
         for (const file of allFiles) {
-            // 判断是否是日记文件
             let isDailyNote = false;
             let dateStr: string | null = null;
 
             if (dailyFolder) {
-                // 如果指定了日记文件夹，检查文件是否在该文件夹内
                 if (!file.path.startsWith(dailyFolder + '/')) continue;
-                
                 const relativePath = file.path.slice(dailyFolder.length + 1).replace(/\.md$/, '');
-                // 尝试解析日期
                 const m = window.moment(relativePath, format || 'YYYY-MM-DD', true);
                 if (m.isValid()) {
                     isDailyNote = true;
                     dateStr = m.format('YYYY-MM-DD');
                 }
             } else {
-                // 如果未指定文件夹，尝试从文件名解析日期
                 const basename = file.basename;
                 const m = window.moment(basename, format || 'YYYY-MM-DD', true);
                 if (m.isValid()) {
@@ -1361,7 +1360,6 @@ tags: [核心概念, ${activeCourse.name}]
 
             if (!isDailyNote || !dateStr) continue;
 
-            // 读取文件内容
             try {
                 const content = await this.app.vault.read(file);
                 const lines = content.split('\n');
@@ -1369,7 +1367,6 @@ tags: [核心概念, ${activeCourse.name}]
                 for (let i = 0; i < lines.length; i++) {
                     const line = lines[i];
                     if (line && /^\s*-\s*\[ \]/.test(line)) {
-                        // 提取截止日期
                         const dueDateMatch = line.match(dueDateRegex);
                         const dueDate = dueDateMatch ? dueDateMatch[1] : undefined;
 
@@ -1377,19 +1374,16 @@ tags: [核心概念, ${activeCourse.name}]
                         let shouldShow = false;
 
                         if (dueDate) {
-                            // 有截止日期的任务：显示未逾期的任务
                             const dueDateTime = window.moment(dueDate, 'YYYY-MM-DD');
                             isOverdue = now.isAfter(dueDateTime, 'day');
 
-                            // 如果启用了逾期过滤，跳过已过期的任务
-                            if (this.plugin.settings.showOverdueTasks !== false && isOverdue) {
-                                continue;
-                            }
+                            // 如果逾期且设置不显示逾期，跳过
+                            if (isOverdue && !showOverdue) continue;
 
                             // 只显示截止日期 >= 今天的任务
                             shouldShow = dueDateTime.isSameOrAfter(now, 'day');
                         } else {
-                            // 无截止日期的任务：仅当天日记显示
+                            // 无截止日期，仅显示当天日记的任务
                             shouldShow = (dateStr === today);
                         }
 
@@ -1410,20 +1404,14 @@ tags: [核心概念, ${activeCourse.name}]
             }
         }
 
-        // 按截止日期排序（有截止日期的靠前，按日期从近到远排列）
+        // 按截止日期排序
         tasks.sort((a, b) => {
             const aDue = a.dueDate ? window.moment(a.dueDate, 'YYYY-MM-DD') : null;
             const bDue = b.dueDate ? window.moment(b.dueDate, 'YYYY-MM-DD') : null;
 
-            // 都有截止日期，按日期排序
-            if (aDue && bDue) {
-                return aDue.diff(bDue);
-            }
-            // 只有 a 有截止日期，a 靠前
+            if (aDue && bDue) return aDue.diff(bDue);
             if (aDue) return -1;
-            // 只有 b 有截止日期，b 靠前
             if (bDue) return 1;
-            // 都没有截止日期，保持原顺序
             return 0;
         });
 
@@ -1467,10 +1455,11 @@ export default class MyPlugin extends Plugin {
         const data = await this.loadData();
         this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
         if (data?.quickAdd) this.settings.quickAdd = Object.assign({}, DEFAULT_QUICK_ADD, data.quickAdd);
-        // 确保上课模式相关字段始终有合法初始值
         if (!this.settings.courses) this.settings.courses = [];
         if (!this.settings.currentMode) this.settings.currentMode = 'normal';
         if (this.settings.selectedCourseId === undefined) this.settings.selectedCourseId = '';
+        // 确保逾期显示开关有默认值（默认隐藏逾期任务，需用户手动开启）
+        if (this.settings.showOverdueTasks === undefined) this.settings.showOverdueTasks = false;
     }
 
     async saveSettings(): Promise<void> {

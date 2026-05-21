@@ -20,6 +20,7 @@ export interface CalendarConfig {
     showTaskCount?: boolean;
     dateFormat?: string;
     folderPath?: string;
+    templatePath?: string; // 新增：日记模板文件路径
 }
 
 // ── 新增：标签云专属高级配置接口 ──
@@ -540,6 +541,20 @@ export class WorkPageSettingTab extends PluginSettingTab {
                             .setValue(section.calendarConfig?.folderPath || '')
                             .onChange(async (value) => {
                                 section.calendarConfig!.folderPath = value;
+                                await this.plugin.saveSettings();
+                            })
+                    );
+
+                // ── 新增：日记模板路径配置 ──
+                new Setting(containerEl)
+                    .setName('日记模板文件路径')
+                    .setDesc('点击无日记的日期时，将以此模板内容创建新日记文件。留空则创建空白日记。模板中可使用 {{date}}（日期）、{{title}}（文件名）变量。')
+                    .addText((text) =>
+                        text
+                            .setPlaceholder('Templates/日记模板.md')
+                            .setValue(section.calendarConfig?.templatePath || '')
+                            .onChange(async (value) => {
+                                section.calendarConfig!.templatePath = value.trim();
                                 await this.plugin.saveSettings();
                             })
                     );
