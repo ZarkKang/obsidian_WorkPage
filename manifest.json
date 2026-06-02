@@ -1,7 +1,7 @@
 {
   "id": "workpage",
   "name": "WorkPage",
-  "version": "1.0.0",
+  "version": "1.0.7",
   "minAppVersion": "0.15.0",
   "description": "一个高度可定制的工作台插件，集中展示待办、最近文件、自定义内容等。",
   "author": "ZarkKang",
