@@ -17,6 +17,7 @@ import {
     DEFAULT_SETTINGS,
     DEFAULT_QUICK_ADD,
     DEFAULT_SIDEBAR_SETTINGS,
+    DEFAULT_TODO_SETTINGS,
     MyPluginSettings,
     WorkPageSettingTab,
     WorkPageSection,
@@ -89,6 +90,7 @@ class SectionConfigModal extends Modal {
                     .addOption('todo', '待办')
                     .addOption('memo', '备忘便签')
                     .addOption('dashboard', '仪表盘')
+                    .addOption('concept', '概念笔记')
                     .setValue(this.section.type)
                     .onChange(async (v: WorkPageSection['type']) => {
                         this.section.type = v;
@@ -110,11 +112,11 @@ class SectionConfigModal extends Modal {
                     })
             );
 
-        if (this.section.type === 'note' || this.section.type === 'memo') {
+        if (this.section.type === 'note' || this.section.type === 'memo' || this.section.type === 'concept') {
             let fileInput: HTMLInputElement;
             new Setting(contentEl)
                 .setName('文件路径')
-                .setDesc('输入关键词搜索库内笔记文件')
+                .setDesc(this.section.type === 'concept' ? '新概念笔记的保存文件夹路径' : '输入关键词搜索库内笔记文件')
                 .addText((text) => {
                     fileInput = text.inputEl;
                     text
@@ -124,7 +126,9 @@ class SectionConfigModal extends Modal {
                             await this.plugin.saveSettings();
                         });
                 });
-            new FileSuggest(this.app, fileInput!);
+            if (this.section.type !== 'concept') {
+                new FileSuggest(this.app, fileInput!);
+            }
         }
 
         new Setting(contentEl)
@@ -236,6 +240,7 @@ class WorkPageView extends ItemView {
             todo: 'check-circle',
             memo: 'sticky-note',
             dashboard: 'bar-chart-2',
+            concept: 'lightbulb',
         };
 
         const activeSections = getCurrentSections(this.plugin.settings);
@@ -300,6 +305,28 @@ class WorkPageView extends ItemView {
             }
             titleEl.createSpan({ text: displayTitle });
 
+            const collapseBtn = titleEl.createSpan({ cls: 'section-collapse-btn' });
+            setIcon(collapseBtn, section.collapsed ? 'chevron-right' : 'chevron-down');
+            if (section.collapsed) {
+                sectionEl.addClass('section-collapsed');
+            }
+            collapseBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const sections = getCurrentSections(this.plugin.settings);
+                const target = sections.find(s => s.id === section.id);
+                if (target) {
+                    target.collapsed = !target.collapsed;
+                    if (target.collapsed) {
+                        sectionEl.addClass('section-collapsed');
+                        setIcon(collapseBtn, 'chevron-right');
+                    } else {
+                        sectionEl.removeClass('section-collapsed');
+                        setIcon(collapseBtn, 'chevron-down');
+                    }
+                    void this.plugin.saveSettings();
+                }
+            });
+
             const gearBtn = titleEl.createSpan({ cls: 'section-gear-btn' });
             setIcon(gearBtn, 'settings');
             gearBtn.addEventListener('click', (e) => {
@@ -319,6 +346,8 @@ class WorkPageView extends ItemView {
                 this.renderMemo(content, section);
             } else if (section.type === 'dashboard') {
                 await this.renderDashboard(content);
+            } else if (section.type === 'concept') {
+                this.renderConcept(content, section);
             } else {
                 content.createEl('p', { text: '未知分区类型' });
             }
@@ -332,6 +361,7 @@ class WorkPageView extends ItemView {
                 name: '📄 内容',
                 items: [
                     { type: 'note' as const, icon: 'file-text', label: '笔记' },
+                    { type: 'concept' as const, icon: 'lightbulb', label: '概念笔记' },
                     { type: 'dashboard' as const, icon: 'bar-chart-2', label: '仪表盘' },
                 ]
             },
@@ -383,11 +413,17 @@ class WorkPageView extends ItemView {
             .then((tasks) => {
                 loading.remove();
                 if (tasks.length === 0) {
-                    const dailyPlugin = this.app.internalPlugins.getEnabledPluginById('daily-notes');
-                    if (!dailyPlugin) {
-                        content.createEl('p', { text: '请先启用核心插件"日记"', cls: 'no-data' });
+                    const todoSettings = this.plugin.settings.todoSettings;
+                    const hasCustomFolder = todoSettings?.taskFolderPath && todoSettings.taskFolderPath.trim() !== '';
+                    if (hasCustomFolder) {
+                        content.createEl('p', { text: `文件夹 "${todoSettings.taskFolderPath}" 中暂无未完成的任务 ✨`, cls: 'no-data' });
                     } else {
-                        content.createEl('p', { text: '今天的日记暂无未完成的任务 ✨', cls: 'no-data' });
+                        const dailyPlugin = this.app.internalPlugins.getEnabledPluginById('daily-notes');
+                        if (!dailyPlugin) {
+                            content.createEl('p', { text: '请先启用核心插件"日记"或在设置中指定任务文件夹', cls: 'no-data' });
+                        } else {
+                            content.createEl('p', { text: '今天的日记暂无未完成的任务 ✨', cls: 'no-data' });
+                        }
                     }
                 } else {
                     const ul = content.createEl('ul');
@@ -397,6 +433,7 @@ class WorkPageView extends ItemView {
                         const checkbox = li.createEl('input', { cls: 'workpage-task-checkbox' });
                         checkbox.type = 'checkbox';
                         checkbox.checked = false;
+                        const nameSpan = li.createSpan({ cls: 'item-name workpage-task-text' });
                         checkbox.addEventListener('change', (e) => {
                             e.stopPropagation();
                             if (checkbox.checked) {
@@ -410,16 +447,27 @@ class WorkPageView extends ItemView {
                         });
 
                         const parsed = this.parseTaskDueDate(task.text.replace(/^\s*-\s*\[[ xX]?\]\s*/, '').trim());
-                        const nameSpan = li.createSpan({ text: parsed.text, cls: 'item-name workpage-task-text' });
+                        nameSpan.setText(parsed.text);
+
                         if (task.dueDate) {
                             const dueDateBadge = li.createSpan({ cls: 'task-due-date-badge' });
                             if (task.isOverdue) {
                                 dueDateBadge.addClass('overdue');
-                            } else if (task.dueDate === window.moment().format('YYYY-MM-DD')) {
+                                const overdueDays = task.daysRemaining ? Math.abs(task.daysRemaining) : 0;
+                                dueDateBadge.setText(`⏰ 逾期${overdueDays}天`);
+                            } else if (task.daysRemaining !== undefined && task.daysRemaining === 0) {
                                 dueDateBadge.addClass('today');
+                                dueDateBadge.setText('📅 今天截止');
+                            } else if (task.daysRemaining !== undefined && task.daysRemaining > 0 && task.daysRemaining <= 3) {
+                                dueDateBadge.addClass('approaching');
+                                dueDateBadge.setText(`⏳ 还剩${task.daysRemaining}天`);
+                            } else if (task.daysRemaining !== undefined) {
+                                dueDateBadge.setText(`📅 ${task.dueDate}`);
+                            } else {
+                                dueDateBadge.setText(`📅 ${task.dueDate}`);
                             }
-                            dueDateBadge.setText(`📅${task.dueDate}`);
                         }
+
                         nameSpan.addEventListener('click', () => {
                             const leaf = this.app.workspace.getLeaf(false);
                             void leaf.openFile(task.file).then(() => {
@@ -566,6 +614,138 @@ class WorkPageView extends ItemView {
         void loadMemo();
     }
 
+    private renderConcept(content: HTMLElement, section: WorkPageSection): void {
+        const folderPath = section.filePath || '';
+        const wrap = content.createDiv({ cls: 'workpage-concept' });
+
+        const titleRow = wrap.createDiv({ cls: 'concept-title-row' });
+        const titleInput = titleRow.createEl('input', {
+            cls: 'concept-title-input',
+            placeholder: '输入概念标题...',
+        });
+        titleInput.type = 'text';
+
+        const tagsRow = wrap.createDiv({ cls: 'concept-tags-row' });
+        const tagsInput = tagsRow.createEl('input', {
+            cls: 'concept-tags-input',
+            placeholder: '标签 (用 # 或空格分隔，如: #前端 #React)',
+        });
+        tagsInput.type = 'text';
+
+        const bodyRow = wrap.createDiv({ cls: 'concept-body-row' });
+        const bodyInput = bodyRow.createEl('textarea', {
+            cls: 'concept-body-input',
+            placeholder: '输入概念内容...',
+        });
+
+        const actionRow = wrap.createDiv({ cls: 'concept-action-row' });
+        const folderHint = actionRow.createSpan({ cls: 'concept-folder-hint' });
+        folderHint.setText(folderPath ? `保存至: ${folderPath}/` : '保存至: 库根目录/');
+
+        const createBtn = actionRow.createEl('button', { cls: 'concept-create-btn' });
+        setIcon(createBtn.createSpan({ cls: 'concept-create-btn-icon' }), 'plus');
+        createBtn.createSpan({ text: '创建概念笔记' });
+
+        const recentList = wrap.createDiv({ cls: 'concept-recent-list' });
+
+        const loadRecent = async () => {
+            recentList.empty();
+            if (!folderPath) {
+                recentList.createEl('p', { text: '设置保存文件夹后可查看最近创建的概念笔记', cls: 'no-data' });
+                return;
+            }
+            const folder = this.app.vault.getAbstractFileByPath(folderPath);
+            if (!folder || !('children' in folder)) {
+                recentList.createEl('p', { text: '文件夹不存在，创建第一条笔记后将自动创建', cls: 'no-data' });
+                return;
+            }
+            const files = (folder as any).children
+                .filter((f: any) => f instanceof TFile && f.extension === 'md')
+                .sort((a: any, b: any) => b.stat.mtime - a.stat.mtime)
+                .slice(0, 8);
+            if (files.length === 0) {
+                recentList.createEl('p', { text: '暂无概念笔记', cls: 'no-data' });
+                return;
+            }
+            const header = recentList.createDiv({ cls: 'concept-recent-header' });
+            header.createSpan({ text: '最近创建' });
+
+            files.forEach((file: TFile) => {
+                const item = recentList.createDiv({ cls: 'concept-recent-item' });
+                setIcon(item.createSpan({ cls: 'concept-recent-icon' }), 'lightbulb');
+                item.createSpan({ text: file.basename, cls: 'concept-recent-name' });
+                item.addEventListener('click', () => {
+                    void this.app.workspace.getLeaf(false).openFile(file);
+                });
+            });
+        };
+
+        const createNote = async () => {
+            const title = titleInput.value.trim();
+            const body = bodyInput.value.trim();
+            const tagsRaw = tagsInput.value.trim();
+
+            if (!title) {
+                titleInput.addClass('concept-input-error');
+                setTimeout(() => titleInput.removeClass('concept-input-error'), 600);
+                return;
+            }
+
+            const tags = tagsRaw
+                .split(/[\s,]+/)
+                .map(t => t.startsWith('#') ? t : `#${t}`)
+                .filter(t => t.length > 1)
+                .join(' ');
+
+            const now = window.moment();
+            const timestamp = now.format('YYYYMMDDHHmmss');
+            const safeTitle = title.replace(/[\\/:*?"<>|]/g, '-');
+            const fileName = `${timestamp} ${safeTitle}.md`;
+            const filePath = folderPath ? `${folderPath}/${fileName}` : fileName;
+
+            const frontmatter = [
+                '---',
+                `title: "${title}"`,
+                `date: ${now.format('YYYY-MM-DD')}`,
+                `tags: [${tagsRaw.split(/[\s,]+/).filter(t => t.length > 0).map(t => t.replace(/^#/, '')).join(', ')}]`,
+                '---',
+                '',
+            ].join('\n');
+
+            const content = `${frontmatter}${body}`;
+
+            try {
+                const folder = folderPath ? this.app.vault.getAbstractFileByPath(folderPath) : null;
+                if (folderPath && !folder) {
+                    const parts = folderPath.split('/');
+                    let currentPath = '';
+                    for (const part of parts) {
+                        currentPath = currentPath ? `${currentPath}/${part}` : part;
+                        const existing = this.app.vault.getAbstractFileByPath(currentPath);
+                        if (!existing) {
+                            await this.app.vault.createFolder(currentPath);
+                        }
+                    }
+                }
+                await this.app.vault.create(filePath, content);
+                new Notice(`✅ 概念笔记已创建: ${title}`);
+                titleInput.value = '';
+                bodyInput.value = '';
+                tagsInput.value = '';
+                await loadRecent();
+            } catch (e) {
+                new Notice(`❌ 创建失败: ${e instanceof Error ? e.message : String(e)}`);
+            }
+        };
+
+        createBtn.addEventListener('click', () => { void createNote(); });
+        titleInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { void createNote(); }
+        });
+
+        void loadRecent();
+    }
+
     private async renderDashboard(content: HTMLElement): Promise<void> {
         content.addClass('workpage-dashboard-modern');
         const todayStart = new Date();
@@ -655,8 +835,6 @@ class WorkPageView extends ItemView {
             this.plugin.settings.sidebar.collapsed = !this.plugin.settings.sidebar.collapsed;
             void this.plugin.saveSettings();
         });
-
-        if (collapsed) return;
 
         const shortcutsSection = sidebar.createDiv({ cls: 'sidebar-section' });
         const shortcutsHeader = shortcutsSection.createDiv({ cls: 'sidebar-section-header' });
@@ -895,7 +1073,7 @@ class WorkPageView extends ItemView {
         return { text: taskText, dueDate: null };
     }
 
-    private sortTasks(tasks: { file: TFile; line: number; text: string; dueDate: string | null; isOverdue?: boolean }[]): { file: TFile; line: number; text: string; dueDate: string | null; isOverdue?: boolean }[] {
+    private sortTasks(tasks: { file: TFile; line: number; text: string; dueDate: string | null; isOverdue?: boolean; daysRemaining?: number }[]): { file: TFile; line: number; text: string; dueDate: string | null; isOverdue?: boolean; daysRemaining?: number }[] {
         const today = window.moment().format('YYYY-MM-DD');
         const todayDate = new Date(today);
         return tasks.sort((a, b) => {
@@ -914,23 +1092,48 @@ class WorkPageView extends ItemView {
         });
     }
 
-    private async getAllTasks(): Promise<{ file: TFile; line: number; text: string; dueDate: string | null; isOverdue?: boolean }[]> {
-        const tasks: { file: TFile; line: number; text: string; dueDate: string | null; isOverdue?: boolean }[] = [];
-        const dailyPlugin = this.app.internalPlugins.getEnabledPluginById('daily-notes');
-        if (!dailyPlugin) return tasks;
+    private async getAllTasks(): Promise<{ file: TFile; line: number; text: string; dueDate: string | null; isOverdue?: boolean; daysRemaining?: number }[]> {
+        const tasks: { file: TFile; line: number; text: string; dueDate: string | null; isOverdue?: boolean; daysRemaining?: number }[] = [];
+        const todoSettings = this.plugin.settings.todoSettings;
+        const taskFolderPath = todoSettings?.taskFolderPath || '';
+        const includeSubfolders = todoSettings?.includeSubfolders ?? false;
 
-        const { folder, format } = dailyPlugin.options;
-        const folderPath = folder || '';
         let files: TFile[] = [];
 
-        if (folderPath) {
-            const folderObj = this.app.vault.getAbstractFileByPath(folderPath);
+        if (taskFolderPath) {
+            const folderObj = this.app.vault.getAbstractFileByPath(taskFolderPath);
             if (folderObj && 'children' in folderObj) {
-                files = (folderObj as any).children.filter((f: any) => f instanceof TFile && f.extension === 'md');
+                const collectFiles = (folder: any) => {
+                    for (const child of folder.children) {
+                        if (child instanceof TFile && child.extension === 'md') {
+                            files.push(child);
+                        } else if (includeSubfolders && 'children' in child) {
+                            collectFiles(child);
+                        }
+                    }
+                };
+                collectFiles(folderObj);
             }
         } else {
-            files = this.app.vault.getMarkdownFiles();
+            const dailyPlugin = this.app.internalPlugins.getEnabledPluginById('daily-notes');
+            if (dailyPlugin) {
+                const { folder } = dailyPlugin.options;
+                const folderPath = folder || '';
+                if (folderPath) {
+                    const folderObj = this.app.vault.getAbstractFileByPath(folderPath);
+                    if (folderObj && 'children' in folderObj) {
+                        files = (folderObj as any).children.filter((f: any) => f instanceof TFile && f.extension === 'md');
+                    }
+                } else {
+                    files = this.app.vault.getMarkdownFiles();
+                }
+            } else {
+                files = this.app.vault.getMarkdownFiles();
+            }
         }
+
+        const today = window.moment().format('YYYY-MM-DD');
+        const todayDate = new Date(today);
 
         for (const file of files) {
             try {
@@ -941,15 +1144,20 @@ class WorkPageView extends ItemView {
                     if (line && /^\s*-\s*\[ \]/.test(line)) {
                         const taskText = line.replace(/^\s*-\s*\[[ xX]?\]\s*/, '').trim();
                         const parsed = this.parseTaskDueDate(taskText);
-                        const today = window.moment().format('YYYY-MM-DD');
-                        const todayDate = new Date(today);
                         const isOverdue = parsed.dueDate && new Date(parsed.dueDate) < todayDate ? true : undefined;
+                        let daysRemaining: number | undefined;
+                        if (parsed.dueDate) {
+                            const dueDate = new Date(parsed.dueDate);
+                            const diffTime = dueDate.getTime() - todayDate.getTime();
+                            daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        }
                         tasks.push({
                             file,
                             line: i,
                             text: line.trim(),
                             dueDate: parsed.dueDate,
-                            isOverdue: isOverdue
+                            isOverdue,
+                            daysRemaining,
                         });
                     }
                 }
@@ -960,14 +1168,20 @@ class WorkPageView extends ItemView {
         return this.sortTasks(tasks);
     }
 
-    async getTodayTasks(): Promise<{ file: TFile; line: number; text: string; dueDate?: string | null; isOverdue?: boolean }[]> {
+    async getTodayTasks(): Promise<{ file: TFile; line: number; text: string; dueDate?: string | null; isOverdue?: boolean; daysRemaining?: number }[]> {
         const allTasks = await this.getAllTasks();
         const today = window.moment().format('YYYY-MM-DD');
+        const todoSettings = this.plugin.settings.todoSettings;
+        const taskFolderPath = todoSettings?.taskFolderPath || '';
+
+        if (taskFolderPath) {
+            return allTasks;
+        }
+
         const dailyPlugin = this.app.internalPlugins.getEnabledPluginById('daily-notes');
-        if (!dailyPlugin) return [];
-        const { folder, format } = dailyPlugin.options;
-        const todayFileName = today;
-        const todayFilePath = `${folder ? `${folder}/` : ''}${todayFileName}.md`;
+        if (!dailyPlugin) return allTasks;
+        const { folder } = dailyPlugin.options;
+        const todayFilePath = `${folder ? `${folder}/` : ''}${today}.md`;
         return allTasks.filter((task) => (task.file as any).path === todayFilePath);
     }
 }
@@ -1018,6 +1232,11 @@ export default class MyPlugin extends Plugin {
             this.settings.sidebar = { ...DEFAULT_SIDEBAR_SETTINGS };
         } else {
             this.settings.sidebar = Object.assign({}, DEFAULT_SIDEBAR_SETTINGS, data.sidebar);
+        }
+        if (!data?.todoSettings) {
+            this.settings.todoSettings = { ...DEFAULT_TODO_SETTINGS };
+        } else {
+            this.settings.todoSettings = Object.assign({}, DEFAULT_TODO_SETTINGS, data.todoSettings);
         }
     }
 

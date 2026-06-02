@@ -27,13 +27,19 @@ export interface SidebarSettings {
     autoRefreshRecentFiles: boolean;
 }
 
+export interface TodoSettings {
+    taskFolderPath: string;
+    includeSubfolders: boolean;
+}
+
 export interface WorkPageSection {
     id: string;
     title: string;
-    type: 'note' | 'todo' | 'memo' | 'dashboard';
+    type: 'note' | 'todo' | 'memo' | 'dashboard' | 'concept';
     content: string;
     gridSpan?: number;
     filePath?: string;
+    collapsed?: boolean;
 };
 
 export interface MyPluginSettings {
@@ -45,6 +51,7 @@ export interface MyPluginSettings {
     openWhenEmpty: boolean;
     quickAdd: QuickAddSettings;
     sidebar: SidebarSettings;
+    todoSettings: TodoSettings;
 }
 
 export const DEFAULT_QUICK_ADD: QuickAddSettings = {
@@ -66,6 +73,11 @@ export const DEFAULT_SIDEBAR_SETTINGS: SidebarSettings = {
     ],
     maxRecentFiles: 15,
     autoRefreshRecentFiles: true
+};
+
+export const DEFAULT_TODO_SETTINGS: TodoSettings = {
+    taskFolderPath: '',
+    includeSubfolders: false,
 };
 
 export const DEFAULT_SETTINGS: MyPluginSettings = {
@@ -91,6 +103,7 @@ export const DEFAULT_SETTINGS: MyPluginSettings = {
     openWhenEmpty: false,
     quickAdd: { ...DEFAULT_QUICK_ADD },
     sidebar: { ...DEFAULT_SIDEBAR_SETTINGS },
+    todoSettings: { ...DEFAULT_TODO_SETTINGS },
 };
 
 export function getCurrentSections(settings: MyPluginSettings): WorkPageSection[] {
@@ -204,6 +217,34 @@ export class WorkPageSettingTab extends PluginSettingTab {
         new Setting(containerEl).setName('全局环境与启动行为').setHeading();
         new Setting(containerEl).setName('软件启动时默认打开 WorkPage').addToggle((t) => t.setValue(this.plugin.settings.openOnStartup).onChange(async (v) => { this.plugin.settings.openOnStartup = v; await this.plugin.saveSettings(); }));
         new Setting(containerEl).setName('没有活跃标签页时强制回归 WorkPage').addToggle((t) => t.setValue(this.plugin.settings.openWhenEmpty).onChange(async (v) => { this.plugin.settings.openWhenEmpty = v; await this.plugin.saveSettings(); }));
+
+        new Setting(containerEl).setName('今日待办设置').setHeading();
+        new Setting(containerEl)
+            .setName('任务检索文件夹路径')
+            .setDesc('留空则使用日记插件默认文件夹。填写路径后，仅扫描该文件夹内的笔记文件查找待办任务。')
+            .addText((text) =>
+                text
+                    .setPlaceholder('例如: Tasks 或 任务')
+                    .setValue(this.plugin.settings.todoSettings?.taskFolderPath || '')
+                    .onChange(async (value) => {
+                        if (!this.plugin.settings.todoSettings) this.plugin.settings.todoSettings = { ...DEFAULT_TODO_SETTINGS };
+                        this.plugin.settings.todoSettings.taskFolderPath = value;
+                        await this.plugin.saveSettings();
+                    })
+            );
+
+        new Setting(containerEl)
+            .setName('包含子文件夹')
+            .setDesc('启用后，递归扫描任务文件夹下的所有子文件夹')
+            .addToggle((toggle) =>
+                toggle
+                    .setValue(this.plugin.settings.todoSettings?.includeSubfolders ?? false)
+                    .onChange(async (value) => {
+                        if (!this.plugin.settings.todoSettings) this.plugin.settings.todoSettings = { ...DEFAULT_TODO_SETTINGS };
+                        this.plugin.settings.todoSettings.includeSubfolders = value;
+                        await this.plugin.saveSettings();
+                    })
+            );
 
         new Setting(containerEl)
             .setName('配置布局导出与备份')
