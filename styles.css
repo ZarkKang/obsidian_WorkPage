@@ -1987,41 +1987,309 @@
 /* =================================================================
    响应式设计
    ================================================================= */
-@media (max-width: 1200px) {
+
+/* 桌面端网格：3列 */
+.workpage-grid-desktop {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+/* 移动端网格：1列 */
+.workpage-grid-mobile {
+    grid-template-columns: 1fr;
+}
+
+/* ---------- 平板横屏 (≤1024px) -- 8.8" iPad mini 等 ---------- */
+@media (max-width: 1024px) {
+    .workpage-grid-desktop {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .workpage-container {
+        padding: 16px;
+    }
+
     .workpage-page-sidebar {
         width: 240px;
     }
-}
 
-@media (max-width: 900px) {
-    .workpage-page-sidebar {
-        width: 260px;
-        border-radius: 0 12px 12px 0;
-    }
-
-    .workpage-page-sidebar.sidebar-collapsed {
-        transform: translateX(calc(-100% + 12px));
+    .modern-dashboard-grid {
+        grid-template-columns: repeat(2, 1fr);
     }
 
     .modern-stat-value {
-        font-size: 1.6rem;
+        font-size: 1.5rem;
     }
 
-    .modern-progress-info {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
+    .modern-stat-card {
+        padding: 14px 16px;
     }
 
-    .modern-progress-percentage {
-        align-self: flex-end;
+    .concept-action-row {
+        flex-wrap: wrap;
+    }
+
+    .concept-folder-hint {
+        flex: 0 0 100%;
+        order: 1;
+    }
+
+    .concept-create-btn {
+        order: 0;
     }
 }
 
+/* ---------- 平板竖屏 / 小屏 (≤768px) ---------- */
 @media (max-width: 768px) {
+    .workpage-grid-desktop {
+        grid-template-columns: 1fr;
+    }
+
+    .workpage-container {
+        padding: 12px;
+    }
+
+    .workpage-header h2 {
+        font-size: 1.25em;
+        margin-bottom: 16px;
+    }
+
+    .workpage-section {
+        padding: 14px;
+        border-radius: 12px;
+    }
+
+    .workpage-section:hover {
+        transform: none;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+    }
+
+    .workpage-section::before {
+        display: none;
+    }
+
+    .section-title {
+        font-size: 0.95em;
+        margin-bottom: 12px;
+    }
+
+    .section-gear-btn,
+    .section-collapse-btn {
+        opacity: 0.6;
+        width: 36px;
+        height: 36px;
+    }
+
+    .section-drag-handle {
+        display: none;
+    }
+
+    /* 添加栏：纵向布局 */
+    .workpage-add-bar {
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px 14px;
+    }
+
+    .add-bar-scroll {
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding-bottom: 4px;
+    }
+
+    .add-bar-cat-name {
+        font-size: 0.72em;
+    }
+
+    .add-bar-btn {
+        padding: 8px 14px;
+        font-size: 0.8em;
+        min-height: 40px;
+    }
+
+    /* 快速添加：纵向布局 */
+    .workpage-quick-add {
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px;
+    }
+
+    .quick-add-label-wrap {
+        width: 100%;
+    }
+
+    .quick-add-input-wrap {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .quick-add-input {
+        font-size: 16px;
+        padding: 10px 14px;
+        min-height: 44px;
+    }
+
+    .quick-add-date {
+        min-height: 44px;
+        font-size: 16px;
+    }
+
+    .quick-add-btn {
+        min-height: 44px;
+        padding: 10px 18px;
+        font-size: 16px;
+    }
+
+    /* 仪表盘 */
+    .modern-dashboard-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .modern-stat-card {
+        padding: 14px 16px;
+    }
+
+    .modern-stat-value {
+        font-size: 1.5rem;
+    }
+
+    .modern-progress-container {
+        padding: 14px;
+    }
+
+    .modern-progress-percentage {
+        font-size: 1.3rem;
+    }
+
+    /* 概念笔记 */
+    .concept-title-input {
+        font-size: 16px;
+        padding: 10px 14px;
+        min-height: 44px;
+    }
+
+    .concept-tags-input {
+        font-size: 16px;
+        min-height: 44px;
+    }
+
+    .concept-body-input {
+        font-size: 16px;
+        min-height: 80px;
+    }
+
+    .concept-create-btn {
+        min-height: 44px;
+        font-size: 16px;
+        padding: 10px 18px;
+    }
+
+    .concept-action-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .concept-folder-hint {
+        font-size: 0.72em;
+    }
+
+    /* 备忘便签 */
+    .memo-add-input {
+        font-size: 16px;
+        min-height: 44px;
+    }
+
+    .memo-add-btn {
+        min-height: 44px;
+        padding: 10px 16px;
+    }
+
+    .memo-item {
+        padding: 10px 12px;
+        min-height: 44px;
+    }
+
+    .memo-item-checkbox {
+        width: 20px;
+        height: 20px;
+    }
+
+    .memo-item-del {
+        opacity: 0.5;
+        width: 32px;
+        height: 32px;
+    }
+
+    .memo-item-del svg {
+        width: 16px;
+        height: 16px;
+    }
+
+    /* 待办任务 */
+    .workpage-task-item {
+        padding: 10px 8px;
+        min-height: 44px;
+    }
+
+    .workpage-task-checkbox {
+        width: 20px;
+        height: 20px;
+    }
+
+    .task-due-date-badge {
+        font-size: 0.72em;
+        padding: 3px 8px;
+    }
+
+    .todo-section-header {
+        margin-bottom: 8px;
+        padding-bottom: 6px;
+    }
+
+    .todo-section-title {
+        font-size: 0.76em;
+    }
+
+    .all-todo-scroll {
+        max-height: 360px;
+    }
+
+    /* 侧边栏：平板竖屏覆盖模式 */
+    .workpage-page-sidebar {
+        width: 280px;
+        max-width: 80vw;
+        border-radius: 0 12px 12px 0;
+        z-index: 20;
+    }
+
+    .workpage-page-sidebar.sidebar-collapsed {
+        transform: translateX(calc(-100% + 8px));
+    }
+
+    .sidebar-toggle-btn {
+        width: 36px;
+        height: 36px;
+    }
+
+    .sidebar-section {
+        padding: 12px;
+    }
+
+    .sidebar-shortcut-item {
+        padding: 10px 12px;
+        min-height: 44px;
+    }
+
+    .sidebar-file-item {
+        padding: 10px 12px;
+        min-height: 44px;
+    }
+
+    /* 日历 */
     .calendar-day {
-        min-height: 65px;
-        padding: 4px;
+        min-height: 55px;
+        padding: 4px 3px;
+        border-radius: 8px;
     }
 
     .calendar-day-number {
@@ -2043,20 +2311,339 @@
         font-size: 1em;
         min-width: 100px;
     }
-}
 
-@media (max-width: 480px) {
-    .modern-stat-value {
-        font-size: 1.6rem;
+    .calendar-header {
+        margin-bottom: 12px;
+        gap: 8px;
     }
 
-    .modern-progress-info {
-        flex-direction: column;
-        align-items: flex-start;
+    .calendar-quick-btns {
+        gap: 6px;
+        margin-bottom: 10px;
+    }
+
+    .calendar-weekday {
+        font-size: 0.72em;
+        padding: 4px 2px;
+    }
+
+    .calendar-legend {
+        gap: 10px;
+        margin-top: 12px;
+        padding-top: 10px;
+    }
+}
+
+/* ---------- 手机 (≤480px) -- iPhone 15 标准版等 ---------- */
+@media (max-width: 480px) {
+    .workpage-container {
+        padding: 8px;
+    }
+
+    .workpage-grid {
         gap: 10px;
     }
 
+    .workpage-header h2 {
+        font-size: 1.1em;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+    }
+
+    .workpage-section {
+        padding: 10px;
+        border-radius: 10px;
+    }
+
+    .section-title {
+        font-size: 0.88em;
+        margin-bottom: 10px;
+    }
+
+    .section-title .section-icon svg {
+        width: 15px;
+        height: 15px;
+    }
+
+    .section-gear-btn,
+    .section-collapse-btn {
+        width: 32px;
+        height: 32px;
+    }
+
+    .section-content {
+        font-size: 0.88em;
+    }
+
+    /* 添加栏 */
+    .workpage-add-bar {
+        padding: 10px;
+        gap: 8px;
+        margin-top: 12px;
+    }
+
+    .add-bar-btn {
+        padding: 6px 10px;
+        font-size: 0.76em;
+        min-height: 36px;
+        border-radius: 6px;
+    }
+
+    .add-bar-btn svg {
+        width: 13px;
+        height: 13px;
+    }
+
+    .add-bar-cat-name {
+        font-size: 0.68em;
+    }
+
+    /* 快速添加 */
+    .workpage-quick-add {
+        padding: 10px;
+        gap: 6px;
+        margin-top: 16px;
+    }
+
+    .quick-add-label {
+        font-size: 0.8em;
+    }
+
+    .quick-add-input {
+        font-size: 16px;
+        padding: 8px 12px;
+        min-height: 44px;
+    }
+
+    .quick-add-date {
+        font-size: 16px;
+        padding: 8px 12px;
+        min-height: 44px;
+    }
+
+    .quick-add-btn {
+        min-height: 44px;
+        font-size: 14px;
+        padding: 8px 14px;
+    }
+
+    /* 仪表盘 */
+    .modern-stat-value {
+        font-size: 1.3rem;
+    }
+
+    .modern-stat-card {
+        padding: 10px 12px;
+    }
+
+    .modern-stat-icon {
+        width: 28px;
+        height: 28px;
+    }
+
+    .modern-stat-label {
+        font-size: 0.78rem;
+    }
+
+    .modern-progress-container {
+        padding: 10px;
+    }
+
+    .modern-progress-title {
+        font-size: 0.85rem;
+    }
+
     .modern-progress-percentage {
-        align-self: flex-end;
+        font-size: 1.1rem;
+    }
+
+    /* 概念笔记 */
+    .concept-title-input {
+        font-size: 16px;
+        padding: 8px 12px;
+        border-radius: 8px;
+    }
+
+    .concept-tags-input {
+        font-size: 16px;
+        padding: 8px 12px;
+    }
+
+    .concept-body-input {
+        font-size: 16px;
+        padding: 8px 12px;
+        min-height: 60px;
+        border-radius: 8px;
+    }
+
+    .concept-create-btn {
+        font-size: 14px;
+        padding: 8px 14px;
+        border-radius: 8px;
+    }
+
+    .concept-recent-list {
+        padding-top: 8px;
+    }
+
+    .concept-recent-item {
+        font-size: 0.82em;
+        padding: 8px 10px;
+    }
+
+    /* 备忘便签 */
+    .memo-list {
+        max-height: 220px;
+    }
+
+    .memo-item {
+        padding: 8px 10px;
+    }
+
+    .memo-item-label {
+        font-size: 0.85em;
+    }
+
+    /* 待办任务 */
+    .workpage-task-item {
+        padding: 8px 6px;
+    }
+
+    .task-due-date-badge {
+        font-size: 0.68em;
+        padding: 2px 6px;
+        margin-left: 4px;
+    }
+
+    .task-source-label {
+        font-size: 0.66em;
+    }
+
+    .todo-section {
+        margin-bottom: 10px;
+    }
+
+    .todo-section-title {
+        font-size: 0.72em;
+    }
+
+    .all-todo-scroll {
+        max-height: 300px;
+    }
+
+    /* 侧边栏 */
+    .workpage-page-sidebar {
+        width: 260px;
+        max-width: 85vw;
+    }
+
+    .sidebar-section {
+        padding: 10px;
+    }
+
+    .sidebar-section-header h3 {
+        font-size: 0.85em;
+    }
+
+    .sidebar-shortcut-item {
+        padding: 8px 10px;
+        font-size: 0.85em;
+    }
+
+    .sidebar-file-item {
+        padding: 8px 10px;
+        font-size: 0.83em;
+    }
+
+    /* 日历 */
+    .calendar-day {
+        min-height: 48px;
+        padding: 3px 2px;
+        border-radius: 6px;
+        gap: 2px;
+    }
+
+    .calendar-day-number {
+        font-size: 10px;
+    }
+
+    .calendar-task-badge {
+        font-size: 0.55em;
+        padding: 1px 3px;
+    }
+
+    .calendar-weekday {
+        font-size: 0.65em;
+        padding: 3px 1px;
+    }
+
+    .calendar-nav-btn {
+        width: 26px;
+        height: 26px;
+    }
+
+    .calendar-month-label {
+        font-size: 0.9em;
+        min-width: 80px;
+    }
+
+    .calendar-today-btn,
+    .calendar-goto-btn {
+        font-size: 0.75em;
+        padding: 5px 10px;
+    }
+
+    .calendar-legend {
+        gap: 8px;
+        font-size: 0.7em;
+    }
+
+    .calendar-legend-item {
+        font-size: 0.7em;
+    }
+
+    .calendar-grid:has(.calendar-weeknum) {
+        grid-template-columns: 28px repeat(7, 1fr);
+    }
+
+    .calendar-weeknum-header,
+    .calendar-weeknum {
+        font-size: 0.65em;
+        padding: 4px 2px;
+    }
+}
+
+/* ---------- 超小屏 (≤360px) ---------- */
+@media (max-width: 360px) {
+    .workpage-container {
+        padding: 6px;
+    }
+
+    .workpage-grid {
+        gap: 8px;
+    }
+
+    .workpage-section {
+        padding: 8px;
+        border-radius: 8px;
+    }
+
+    .section-title {
+        font-size: 0.82em;
+        gap: 4px;
+    }
+
+    .add-bar-btn {
+        padding: 5px 8px;
+        font-size: 0.72em;
+    }
+
+    .workpage-task-item {
+        padding: 6px 4px;
+    }
+
+    .task-due-date-badge {
+        font-size: 0.64em;
+        padding: 1px 5px;
     }
 }

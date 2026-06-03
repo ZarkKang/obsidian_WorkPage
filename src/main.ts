@@ -232,12 +232,7 @@ class WorkPageView extends ItemView {
         const grid = mainContainer.createDiv({ cls: 'workpage-grid' });
         grid.style.display = 'grid';
         grid.style.gap = '16px';
-
-        if (Platform.isMobile) {
-            grid.style.gridTemplateColumns = '1fr';
-        } else {
-            grid.style.gridTemplateColumns = 'repeat(3, 1fr)';
-        }
+        grid.addClass(Platform.isMobile ? 'workpage-grid-mobile' : 'workpage-grid-desktop');
 
         const iconMap: Record<string, string> = {
             note: 'file-text',
