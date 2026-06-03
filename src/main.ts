@@ -87,7 +87,8 @@ class SectionConfigModal extends Modal {
             .addDropdown((drop) =>
                 drop
                     .addOption('note', '笔记')
-                    .addOption('todo', '待办')
+                    .addOption('todo', '今日待办')
+                    .addOption('all-todo', '全部待办')
                     .addOption('memo', '备忘便签')
                     .addOption('dashboard', '仪表盘')
                     .addOption('concept', '概念笔记')
@@ -112,21 +113,24 @@ class SectionConfigModal extends Modal {
                     })
             );
 
-        if (this.section.type === 'note' || this.section.type === 'memo' || this.section.type === 'concept') {
+        if (this.section.type === 'note' || this.section.type === 'memo' || this.section.type === 'concept' || this.section.type === 'all-todo') {
             let fileInput: HTMLInputElement;
             new Setting(contentEl)
-                .setName('文件路径')
-                .setDesc(this.section.type === 'concept' ? '新概念笔记的保存文件夹路径' : '输入关键词搜索库内笔记文件')
+                .setName(this.section.type === 'all-todo' ? '任务文件夹路径' : '文件路径')
+                .setDesc(this.section.type === 'concept' ? '新概念笔记的保存文件夹路径' :
+                         this.section.type === 'all-todo' ? '留空使用全局设置，填写后仅扫描该文件夹内的待办任务' :
+                         '输入关键词搜索库内笔记文件')
                 .addText((text) => {
                     fileInput = text.inputEl;
                     text
+                        .setPlaceholder(this.section.type === 'all-todo' ? '例如: Tasks（留空=全局设置）' : '')
                         .setValue(this.section.filePath || '')
                         .onChange(async (v) => {
                             this.section.filePath = v;
                             await this.plugin.saveSettings();
                         });
                 });
-            if (this.section.type !== 'concept') {
+            if (this.section.type !== 'concept' && this.section.type !== 'all-todo') {
                 new FileSuggest(this.app, fileInput!);
             }
         }
@@ -238,6 +242,7 @@ class WorkPageView extends ItemView {
         const iconMap: Record<string, string> = {
             note: 'file-text',
             todo: 'check-circle',
+            'all-todo': 'list-checks',
             memo: 'sticky-note',
             dashboard: 'bar-chart-2',
             concept: 'lightbulb',
@@ -340,6 +345,8 @@ class WorkPageView extends ItemView {
 
             if (section.type === 'todo') {
                 await this.renderTodo(content);
+            } else if (section.type === 'all-todo') {
+                await this.renderAllTodo(content, section);
             } else if (section.type === 'note') {
                 await this.renderNote(content, section);
             } else if (section.type === 'memo') {
@@ -368,7 +375,8 @@ class WorkPageView extends ItemView {
             {
                 name: '✅ 任务',
                 items: [
-                    { type: 'todo' as const, icon: 'check-circle', label: '待办' },
+                    { type: 'todo' as const, icon: 'check-circle', label: '今日待办' },
+                    { type: 'all-todo' as const, icon: 'list-checks', label: '全部待办' },
                     { type: 'memo' as const, icon: 'sticky-note', label: '备忘' },
                 ]
             },
@@ -410,9 +418,10 @@ class WorkPageView extends ItemView {
     private async renderTodo(content: HTMLElement): Promise<void> {
         const loading = content.createEl('p', { text: '加载中...' });
         this.getTodayTasks()
-            .then((tasks) => {
+            .then(({ todayTasks, overdueTasks }) => {
                 loading.remove();
-                if (tasks.length === 0) {
+                const totalCount = todayTasks.length + overdueTasks.length;
+                if (totalCount === 0) {
                     const todoSettings = this.plugin.settings.todoSettings;
                     const hasCustomFolder = todoSettings?.taskFolderPath && todoSettings.taskFolderPath.trim() !== '';
                     if (hasCustomFolder) {
@@ -425,57 +434,78 @@ class WorkPageView extends ItemView {
                             content.createEl('p', { text: '今天的日记暂无未完成的任务 ✨', cls: 'no-data' });
                         }
                     }
-                } else {
-                    const ul = content.createEl('ul');
-                    ul.style.cssText = 'list-style:none; padding:0; margin:0;';
-                    tasks.forEach((task) => {
-                        const li = ul.createEl('li', { cls: 'workpage-list-item workpage-task-item' });
-                        const checkbox = li.createEl('input', { cls: 'workpage-task-checkbox' });
-                        checkbox.type = 'checkbox';
-                        checkbox.checked = false;
-                        const nameSpan = li.createSpan({ cls: 'item-name workpage-task-text' });
-                        checkbox.addEventListener('change', (e) => {
-                            e.stopPropagation();
-                            if (checkbox.checked) {
-                                nameSpan.addClass('workpage-task-done');
-                                setTimeout(() => {
-                                    void this.completeTask(task.file, task.line).then(() => {
-                                        void this.render();
-                                    });
-                                }, 350);
-                            }
-                        });
+                    return;
+                }
 
-                        const parsed = this.parseTaskDueDate(task.text.replace(/^\s*-\s*\[[ xX]?\]\s*/, '').trim());
-                        nameSpan.setText(parsed.text);
-
-                        if (task.dueDate) {
-                            const dueDateBadge = li.createSpan({ cls: 'task-due-date-badge' });
-                            if (task.isOverdue) {
-                                dueDateBadge.addClass('overdue');
-                                const overdueDays = task.daysRemaining ? Math.abs(task.daysRemaining) : 0;
-                                dueDateBadge.setText(`⏰ 逾期${overdueDays}天`);
-                            } else if (task.daysRemaining !== undefined && task.daysRemaining === 0) {
-                                dueDateBadge.addClass('today');
-                                dueDateBadge.setText('📅 今天截止');
-                            } else if (task.daysRemaining !== undefined && task.daysRemaining > 0 && task.daysRemaining <= 3) {
-                                dueDateBadge.addClass('approaching');
-                                dueDateBadge.setText(`⏳ 还剩${task.daysRemaining}天`);
-                            } else if (task.daysRemaining !== undefined) {
-                                dueDateBadge.setText(`📅 ${task.dueDate}`);
-                            } else {
-                                dueDateBadge.setText(`📅 ${task.dueDate}`);
-                            }
+                const renderTaskItem = (task: { file: TFile; line: number; text: string; dueDate?: string | null; isOverdue?: boolean; daysRemaining?: number }, container: HTMLElement) => {
+                    const li = container.createEl('li', { cls: 'workpage-list-item workpage-task-item' });
+                    const checkbox = li.createEl('input', { cls: 'workpage-task-checkbox' });
+                    checkbox.type = 'checkbox';
+                    checkbox.checked = false;
+                    const nameSpan = li.createSpan({ cls: 'item-name workpage-task-text' });
+                    checkbox.addEventListener('change', (e) => {
+                        e.stopPropagation();
+                        if (checkbox.checked) {
+                            nameSpan.addClass('workpage-task-done');
+                            setTimeout(() => {
+                                void this.completeTask(task.file, task.line).then(() => {
+                                    void this.render();
+                                });
+                            }, 350);
                         }
+                    });
 
-                        nameSpan.addEventListener('click', () => {
-                            const leaf = this.app.workspace.getLeaf(false);
-                            void leaf.openFile(task.file).then(() => {
-                                const editor = this.app.workspace.activeEditor?.editor;
-                                if (editor) editor.setCursor({ line: task.line, ch: 0 });
-                            });
+                    const parsed = this.parseTaskDueDate(task.text.replace(/^\s*-\s*\[[ xX]?\]\s*/, '').trim());
+                    nameSpan.setText(parsed.text);
+
+                    if (task.dueDate) {
+                        const dueDateBadge = li.createSpan({ cls: 'task-due-date-badge' });
+                        if (task.isOverdue) {
+                            dueDateBadge.addClass('overdue');
+                            const overdueDays = task.daysRemaining ? Math.abs(task.daysRemaining) : 0;
+                            dueDateBadge.setText(`⏰ 逾期${overdueDays}天`);
+                        } else if (task.daysRemaining !== undefined && task.daysRemaining === 0) {
+                            dueDateBadge.addClass('today');
+                            dueDateBadge.setText('📅 今天截止');
+                        } else if (task.daysRemaining !== undefined && task.daysRemaining > 0 && task.daysRemaining <= 3) {
+                            dueDateBadge.addClass('approaching');
+                            dueDateBadge.setText(`⏳ 还剩${task.daysRemaining}天`);
+                        } else if (task.daysRemaining !== undefined) {
+                            dueDateBadge.setText(`📅 ${task.dueDate}`);
+                        } else {
+                            dueDateBadge.setText(`📅 ${task.dueDate}`);
+                        }
+                    }
+
+                    nameSpan.addEventListener('click', () => {
+                        const leaf = this.app.workspace.getLeaf(false);
+                        void leaf.openFile(task.file).then(() => {
+                            const editor = this.app.workspace.activeEditor?.editor;
+                            if (editor) editor.setCursor({ line: task.line, ch: 0 });
                         });
                     });
+                };
+
+                if (overdueTasks.length > 0) {
+                    const overdueSection = content.createDiv({ cls: 'todo-section overdue-section' });
+                    const overdueHeader = overdueSection.createDiv({ cls: 'todo-section-header overdue-header' });
+                    overdueHeader.createSpan({ cls: 'todo-section-dot overdue-dot' });
+                    overdueHeader.createSpan({ text: `未完成待办 (${overdueTasks.length})`, cls: 'todo-section-title' });
+
+                    const ul = overdueSection.createEl('ul');
+                    ul.style.cssText = 'list-style:none; padding:0; margin:0;';
+                    overdueTasks.forEach(task => renderTaskItem(task, ul));
+                }
+
+                if (todayTasks.length > 0) {
+                    const todaySection = content.createDiv({ cls: 'todo-section today-section' });
+                    const todayHeader = todaySection.createDiv({ cls: 'todo-section-header today-header' });
+                    todayHeader.createSpan({ cls: 'todo-section-dot today-dot' });
+                    todayHeader.createSpan({ text: `今日待办 (${todayTasks.length})`, cls: 'todo-section-title' });
+
+                    const ul = todaySection.createEl('ul');
+                    ul.style.cssText = 'list-style:none; padding:0; margin:0;';
+                    todayTasks.forEach(task => renderTaskItem(task, ul));
                 }
             })
             .catch((error) => {
@@ -483,6 +513,154 @@ class WorkPageView extends ItemView {
                 loading.remove();
                 content.createEl('p', { text: '加载失败', cls: 'no-data' });
             });
+    }
+
+    private async renderAllTodo(content: HTMLElement, section: WorkPageSection): Promise<void> {
+        const loading = content.createEl('p', { text: '加载中...' });
+        const allTasks = await this.getAllTasks();
+        loading.remove();
+
+        const folderFilter = section.filePath?.trim() || '';
+
+        const filteredTasks = folderFilter
+            ? allTasks.filter(t => t.file.path.startsWith(folderFilter + '/') || t.file.path.startsWith(folderFilter))
+            : allTasks;
+
+        if (filteredTasks.length === 0) {
+            if (folderFilter) {
+                content.createEl('p', { text: `文件夹 "${folderFilter}" 中暂无未完成的任务 ✨`, cls: 'no-data' });
+            } else {
+                const todoSettings = this.plugin.settings.todoSettings;
+                const hasCustomFolder = todoSettings?.taskFolderPath && todoSettings.taskFolderPath.trim() !== '';
+                if (hasCustomFolder) {
+                    content.createEl('p', { text: `文件夹 "${todoSettings.taskFolderPath}" 中暂无未完成的任务 ✨`, cls: 'no-data' });
+                } else {
+                    content.createEl('p', { text: '暂无未完成的任务 ✨', cls: 'no-data' });
+                }
+            }
+            return;
+        }
+
+        const scrollWrap = content.createDiv({ cls: 'all-todo-scroll' });
+
+        const today = window.moment().format('YYYY-MM-DD');
+        const todayDate = new Date(today);
+
+        const grouped: Record<string, { file: TFile; line: number; text: string; dueDate: string | null; isOverdue?: boolean; daysRemaining?: number }[]> = {};
+
+        filteredTasks.forEach(task => {
+            if (task.dueDate && task.isOverdue) {
+                const key = task.dueDate;
+                if (!grouped[key]) grouped[key] = [];
+                grouped[key].push(task);
+            } else if (task.dueDate === today) {
+                const key = '__today__';
+                if (!grouped[key]) grouped[key] = [];
+                grouped[key].push(task);
+            } else if (task.dueDate) {
+                const key = task.dueDate;
+                if (!grouped[key]) grouped[key] = [];
+                grouped[key].push(task);
+            } else {
+                const key = '__nodate__';
+                if (!grouped[key]) grouped[key] = [];
+                grouped[key].push(task);
+            }
+        });
+
+        const renderTaskItem = (task: { file: TFile; line: number; text: string; dueDate?: string | null; isOverdue?: boolean; daysRemaining?: number }, container: HTMLElement) => {
+            const li = container.createEl('li', { cls: 'workpage-list-item workpage-task-item' });
+            const checkbox = li.createEl('input', { cls: 'workpage-task-checkbox' });
+            checkbox.type = 'checkbox';
+            checkbox.checked = false;
+            const nameSpan = li.createSpan({ cls: 'item-name workpage-task-text' });
+            checkbox.addEventListener('change', (e) => {
+                e.stopPropagation();
+                if (checkbox.checked) {
+                    nameSpan.addClass('workpage-task-done');
+                    setTimeout(() => {
+                        void this.completeTask(task.file, task.line).then(() => {
+                            void this.render();
+                        });
+                    }, 350);
+                }
+            });
+
+            const parsed = this.parseTaskDueDate(task.text.replace(/^\s*-\s*\[[ xX]?\]\s*/, '').trim());
+            nameSpan.setText(parsed.text);
+
+            if (task.dueDate) {
+                const dueDateBadge = li.createSpan({ cls: 'task-due-date-badge' });
+                if (task.isOverdue) {
+                    dueDateBadge.addClass('overdue');
+                    const overdueDays = task.daysRemaining ? Math.abs(task.daysRemaining) : 0;
+                    dueDateBadge.setText(`⏰ 逾期${overdueDays}天`);
+                } else if (task.daysRemaining !== undefined && task.daysRemaining === 0) {
+                    dueDateBadge.addClass('today');
+                    dueDateBadge.setText('📅 今天截止');
+                } else if (task.daysRemaining !== undefined && task.daysRemaining > 0 && task.daysRemaining <= 3) {
+                    dueDateBadge.addClass('approaching');
+                    dueDateBadge.setText(`⏳ 还剩${task.daysRemaining}天`);
+                } else if (task.daysRemaining !== undefined) {
+                    dueDateBadge.setText(`📅 ${task.dueDate}`);
+                } else {
+                    dueDateBadge.setText(`📅 ${task.dueDate}`);
+                }
+            }
+
+            const sourceLabel = li.createSpan({ cls: 'task-source-label' });
+            sourceLabel.setText(task.file.basename);
+
+            nameSpan.addEventListener('click', () => {
+                const leaf = this.app.workspace.getLeaf(false);
+                void leaf.openFile(task.file).then(() => {
+                    const editor = this.app.workspace.activeEditor?.editor;
+                    if (editor) editor.setCursor({ line: task.line, ch: 0 });
+                });
+            });
+        };
+
+        const dateKeys = Object.keys(grouped).filter(k => k !== '__today__' && k !== '__nodate__').sort();
+
+        const overdueKeys = dateKeys.filter(k => k < today);
+        const upcomingKeys = dateKeys.filter(k => k > today);
+
+        const renderDateGroup = (key: string, tasks: typeof filteredTasks, isOverdue: boolean) => {
+            const section = scrollWrap.createDiv({ cls: 'todo-section' });
+            const header = section.createDiv({ cls: 'todo-section-header' });
+            const dot = header.createSpan({ cls: `todo-section-dot ${isOverdue ? 'overdue-dot' : 'upcoming-dot'}` });
+            const dateLabel = window.moment(key, 'YYYY-MM-DD').format('MM月DD日 ddd');
+            header.createSpan({ text: `${dateLabel} (${tasks.length})`, cls: 'todo-section-title' });
+            if (isOverdue) header.addClass('overdue-header');
+
+            const ul = section.createEl('ul');
+            ul.style.cssText = 'list-style:none; padding:0; margin:0;';
+            tasks.forEach(t => renderTaskItem(t, ul));
+        };
+
+        overdueKeys.forEach(key => renderDateGroup(key, grouped[key], true));
+
+        if (grouped['__today__']) {
+            const todaySection = scrollWrap.createDiv({ cls: 'todo-section today-section' });
+            const todayHeader = todaySection.createDiv({ cls: 'todo-section-header today-header' });
+            todayHeader.createSpan({ cls: 'todo-section-dot today-dot' });
+            todayHeader.createSpan({ text: `今日待办 (${grouped['__today__'].length})`, cls: 'todo-section-title' });
+            const ul = todaySection.createEl('ul');
+            ul.style.cssText = 'list-style:none; padding:0; margin:0;';
+            grouped['__today__'].forEach(t => renderTaskItem(t, ul));
+        }
+
+        upcomingKeys.forEach(key => renderDateGroup(key, grouped[key], false));
+
+        if (grouped['__nodate__']) {
+            const noDateSection = scrollWrap.createDiv({ cls: 'todo-section no-date-section' });
+            const noDateHeader = noDateSection.createDiv({ cls: 'todo-section-header no-date-header' });
+            noDateHeader.createSpan({ cls: 'todo-section-dot no-date-dot' });
+            noDateHeader.createSpan({ text: `未设截止日期 (${grouped['__nodate__'].length})`, cls: 'todo-section-title' });
+            const ul = noDateSection.createEl('ul');
+            ul.style.cssText = 'list-style:none; padding:0; margin:0;';
+            grouped['__nodate__'].forEach(t => renderTaskItem(t, ul));
+        }
     }
 
     private async renderNote(content: HTMLElement, section: WorkPageSection): Promise<void> {
@@ -1081,6 +1259,11 @@ class WorkPageView extends ItemView {
             const bOverdue = b.dueDate && new Date(b.dueDate) < todayDate;
             const aToday = a.dueDate === today;
             const bToday = b.dueDate === today;
+            const aNoDate = !a.dueDate;
+            const bNoDate = !b.dueDate;
+
+            if (aNoDate && !bNoDate) return 1;
+            if (!aNoDate && bNoDate) return -1;
             if (aOverdue && !bOverdue) return -1;
             if (!aOverdue && bOverdue) return 1;
             if (aToday && !bToday && !aOverdue && !bOverdue) return -1;
@@ -1168,21 +1351,31 @@ class WorkPageView extends ItemView {
         return this.sortTasks(tasks);
     }
 
-    async getTodayTasks(): Promise<{ file: TFile; line: number; text: string; dueDate?: string | null; isOverdue?: boolean; daysRemaining?: number }[]> {
+    async getTodayTasks(): Promise<{
+        todayTasks: { file: TFile; line: number; text: string; dueDate?: string | null; isOverdue?: boolean; daysRemaining?: number }[];
+        overdueTasks: { file: TFile; line: number; text: string; dueDate?: string | null; isOverdue?: boolean; daysRemaining?: number }[];
+    }> {
         const allTasks = await this.getAllTasks();
         const today = window.moment().format('YYYY-MM-DD');
+        const todayDate = new Date(today);
         const todoSettings = this.plugin.settings.todoSettings;
         const taskFolderPath = todoSettings?.taskFolderPath || '';
 
-        if (taskFolderPath) {
-            return allTasks;
+        let filteredTasks = allTasks;
+
+        if (!taskFolderPath) {
+            const dailyPlugin = this.app.internalPlugins.getEnabledPluginById('daily-notes');
+            if (dailyPlugin) {
+                const { folder } = dailyPlugin.options;
+                const todayFilePath = `${folder ? `${folder}/` : ''}${today}.md`;
+                filteredTasks = allTasks.filter((task) => (task.file as any).path === todayFilePath);
+            }
         }
 
-        const dailyPlugin = this.app.internalPlugins.getEnabledPluginById('daily-notes');
-        if (!dailyPlugin) return allTasks;
-        const { folder } = dailyPlugin.options;
-        const todayFilePath = `${folder ? `${folder}/` : ''}${today}.md`;
-        return allTasks.filter((task) => (task.file as any).path === todayFilePath);
+        const todayTasks = filteredTasks.filter(t => !t.isOverdue);
+        const overdueTasks = filteredTasks.filter(t => t.isOverdue);
+
+        return { todayTasks, overdueTasks };
     }
 }
 

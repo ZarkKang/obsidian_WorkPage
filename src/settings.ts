@@ -35,7 +35,7 @@ export interface TodoSettings {
 export interface WorkPageSection {
     id: string;
     title: string;
-    type: 'note' | 'todo' | 'memo' | 'dashboard' | 'concept';
+    type: 'note' | 'todo' | 'memo' | 'dashboard' | 'concept' | 'all-todo';
     content: string;
     gridSpan?: number;
     filePath?: string;
