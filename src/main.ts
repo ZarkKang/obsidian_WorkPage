@@ -456,17 +456,17 @@ class WorkPageView extends ItemView {
                     if (task.dueDate) {
                         const dueDateBadge = li.createSpan({ cls: 'task-due-date-badge' });
                         if (task.isOverdue) {
-                            dueDateBadge.addClass('overdue');
+                            dueDateBadge.addClass('urgent');
                             const overdueDays = task.daysRemaining ? Math.abs(task.daysRemaining) : 0;
                             dueDateBadge.setText(`⏰ 逾期${overdueDays}天`);
                         } else if (task.daysRemaining !== undefined && task.daysRemaining === 0) {
-                            dueDateBadge.addClass('today');
-                            dueDateBadge.setText('📅 今天截止');
-                        } else if (task.daysRemaining !== undefined && task.daysRemaining > 0 && task.daysRemaining <= 3) {
-                            dueDateBadge.addClass('approaching');
+                            dueDateBadge.addClass('urgent');
+                            dueDateBadge.setText('⏳ 今天截止');
+                        } else if (task.daysRemaining !== undefined && task.daysRemaining <= 3) {
+                            dueDateBadge.addClass('urgent');
                             dueDateBadge.setText(`⏳ 还剩${task.daysRemaining}天`);
                         } else if (task.daysRemaining !== undefined) {
-                            dueDateBadge.setText(`📅 ${task.dueDate}`);
+                            dueDateBadge.setText(`⏳ 还剩${task.daysRemaining}天`);
                         } else {
                             dueDateBadge.setText(`📅 ${task.dueDate}`);
                         }
@@ -587,17 +587,17 @@ class WorkPageView extends ItemView {
             if (task.dueDate) {
                 const dueDateBadge = li.createSpan({ cls: 'task-due-date-badge' });
                 if (task.isOverdue) {
-                    dueDateBadge.addClass('overdue');
+                    dueDateBadge.addClass('urgent');
                     const overdueDays = task.daysRemaining ? Math.abs(task.daysRemaining) : 0;
                     dueDateBadge.setText(`⏰ 逾期${overdueDays}天`);
                 } else if (task.daysRemaining !== undefined && task.daysRemaining === 0) {
-                    dueDateBadge.addClass('today');
-                    dueDateBadge.setText('📅 今天截止');
-                } else if (task.daysRemaining !== undefined && task.daysRemaining > 0 && task.daysRemaining <= 3) {
-                    dueDateBadge.addClass('approaching');
+                    dueDateBadge.addClass('urgent');
+                    dueDateBadge.setText('⏳ 今天截止');
+                } else if (task.daysRemaining !== undefined && task.daysRemaining <= 3) {
+                    dueDateBadge.addClass('urgent');
                     dueDateBadge.setText(`⏳ 还剩${task.daysRemaining}天`);
                 } else if (task.daysRemaining !== undefined) {
-                    dueDateBadge.setText(`📅 ${task.dueDate}`);
+                    dueDateBadge.setText(`⏳ 还剩${task.daysRemaining}天`);
                 } else {
                     dueDateBadge.setText(`📅 ${task.dueDate}`);
                 }

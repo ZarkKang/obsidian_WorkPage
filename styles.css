@@ -1202,7 +1202,7 @@
     transition: all 0.2s ease;
 }
 
-.task-due-date-badge.overdue {
+.task-due-date-badge.urgent {
     background: rgba(239, 68, 68, 0.15);
     color: #ef4444;
     font-weight: 600;
@@ -1212,18 +1212,6 @@
 @keyframes overdue-pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }
-}
-
-.task-due-date-badge.today {
-    background: rgba(245, 158, 11, 0.15);
-    color: #f59e0b;
-    font-weight: 600;
-}
-
-.task-due-date-badge.approaching {
-    background: rgba(245, 158, 11, 0.12);
-    color: #e67e00;
-    font-weight: 500;
 }
 
 .workpage-task-item {
