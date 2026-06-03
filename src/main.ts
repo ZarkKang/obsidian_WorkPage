@@ -358,6 +358,14 @@ class WorkPageView extends ItemView {
         const addBar = container.createDiv({ cls: 'workpage-add-bar' });
         const addBarLabel = addBar.createSpan({ cls: 'add-bar-label', text: '添加分区' });
         const addBarScroll = addBar.createDiv({ cls: 'add-bar-scroll' });
+
+        // 移动端默认折叠添加分区选项
+        if (Platform.isMobile) {
+            addBar.addClass('add-bar-collapsed');
+            addBarLabel.addEventListener('click', () => {
+                addBar.classList.toggle('add-bar-collapsed');
+            });
+        }
         const sectionCategories = [
             {
                 name: '📄 内容',

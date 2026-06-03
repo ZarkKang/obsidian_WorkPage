@@ -427,6 +427,15 @@
     transform: translateY(0);
 }
 
+/* 折叠状态 */
+.workpage-add-bar.add-bar-collapsed .add-bar-scroll {
+    display: none;
+}
+
+.workpage-add-bar.add-bar-collapsed .add-bar-category {
+    display: none;
+}
+
 /* =================================================================
    列表美化
    ================================================================= */
@@ -2078,6 +2087,23 @@
         padding: 12px 14px;
     }
 
+    .workpage-add-bar.add-bar-collapsed {
+        gap: 0;
+        padding: 10px 14px;
+    }
+
+    .add-bar-label {
+        font-size: 0.85em;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .workpage-add-bar.add-bar-collapsed .add-bar-label::after {
+        content: ' ▸';
+        font-size: 0.8em;
+        opacity: 0.6;
+    }
+
     .add-bar-scroll {
         overflow-x: auto;
         overflow-y: hidden;
@@ -2368,6 +2394,23 @@
         padding: 10px;
         gap: 8px;
         margin-top: 12px;
+    }
+
+    .workpage-add-bar.add-bar-collapsed {
+        gap: 0;
+        padding: 8px 10px;
+    }
+
+    .add-bar-label {
+        font-size: 0.82em;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .workpage-add-bar.add-bar-collapsed .add-bar-label::after {
+        content: ' ▸';
+        font-size: 0.8em;
+        opacity: 0.6;
     }
 
     .add-bar-btn {
